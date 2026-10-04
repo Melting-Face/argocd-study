@@ -307,7 +307,8 @@ cd terraform/cluster/kind && terraform init -backend=false && terraform test
 
 - [ ] **Step 4: `versions.tf` · `variables.tf` 구현**
 
-`required_version = ">= 1.5.0"`. 프로바이더 `tehcyx/kind`(정확한 버전), `hashicorp/external ~> 2.3`.
+`required_version = ">= 1.5.0"`. 프로바이더 `tehcyx/kind`·`hashicorp/external` **둘 다 정확한 버전으로 고정**
+(Global Constraints 가 "전부 버전 고정"이다 — `~>` 범위 표기를 쓰지 않는다).
 
 변수와 검증:
 - `cluster_name` (default `"argocd-study"`)
@@ -424,7 +425,7 @@ cd terraform/platform && terraform init -backend=false && terraform test   # 기
 
 - [ ] **Step 3: `versions.tf` · `provider.tf` · `variables.tf` 구현**
 
-`hashicorp/helm ~> 3.0`, `hashicorp/kubernetes ~> 2.38`.
+`hashicorp/helm`·`hashicorp/kubernetes` **둘 다 정확한 버전으로 고정**(`~>` 범위 금지).
 
 ```hcl
 provider "helm" {

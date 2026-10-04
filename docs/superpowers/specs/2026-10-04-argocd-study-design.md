@@ -574,6 +574,7 @@ terraform -chdir=terraform/platform  apply
 | R10 | 위키 미러 선행조건 미충족 | 중 | 저 | §7-6 선행조건 2개 (사람이 1회) | 자동 관측 경로 없음 |
 | R11 | `tehcyx/kind`는 커뮤니티 프로바이더 | 저 | 중 | 버전 고정. 끊기면 substrate 계약 덕에 `k3d`/`existing`으로 교체 | 구조로 흡수 |
 | R12 | `*.localtest.me` 외부 DNS 의존 | 저 | 저 | 폴백: `/etc/hosts` 또는 `nip.io` (둘 다 실측 확인) | 없음 |
+| R13 | **승인 게이트가 없다** — `permissions.ask`/`deny` 패턴이 전부 무효였다 | 고 | 고 | 비가역 명령만 올바른 형태로 교정. 일상 명령은 **의도적으로 게이트 없음** | 🔴 아래 상세 |
 
 ### R1 상세 — podman 선택에 `KIND_EXPERIMENTAL_PROVIDER`가 안 먹는다
 
@@ -588,6 +589,47 @@ terraform -chdir=terraform/platform  apply
 현재 머신에서는 docker·nerdctl이 없어 podman이 선택된다(§1-4). **그러나 이것은 설정이 아니라 우연이다.**
 Docker Desktop을 설치하면 조용히 docker로 넘어가고, 환경변수로 되돌릴 수단이 없다.
 
+### R13 상세 — `permissions` 패턴이 전부 죽은 규칙이었다 (2026-10-04 실측)
+
+Task 3이 `.claude/settings.json`에 `ask` 31개·`deny` 8개를 `Bash(*terraform*apply*)` 형태로 썼다.
+Task 4에서 `terraform apply`·`git commit`·`git push`를 실행했을 때 **세 번 모두 프롬프트가 뜨지 않았다.**
+
+원인을 공식 문서로 특정했다:
+
+> Claude Code의 Bash 규칙은 **prefix matching**이며 **선행 와일드카드를 지원하지 않는다.**
+> 서브커맨드 앞의 `*`(`Bash(git * main)` 같은)는 시작 시 경고 대상이다.
+> — [Claude Code — Permissions](https://code.claude.com/docs/en/permissions)
+
+올바른 형태는 `Bash(terraform destroy*)`이고, `-chdir=` 같은 중간 플래그는 `Bash(terraform * destroy*)`가 덮는다.
+
+**이것은 dagster-study가 `publishing.md` §7에 "죽은 규칙(실측)"으로 기록한 현상과 같은 원인이다.**
+거기서는 증상만 알았고, 여기서 원인이 특정됐다.
+
+#### 교정 범위 — 비가역 명령만 (사용자 결정)
+
+| 게이트 있음 (비가역) | 게이트 **없음** (의도적) |
+| --- | --- |
+| `terraform destroy` · `state rm` · `state mv` · `state push` | `terraform apply` · `init` · `plan` |
+| `kind delete cluster` | `git commit` · `git push`(일반) |
+| `helm uninstall` · `helmfile destroy` | `helm install` · `upgrade` · `helmfile apply` · `sync` |
+| `argocd app delete` | `argocd app sync` |
+| `kubectl delete` | `kubectl apply` · `patch` · `scale` |
+| `git push --force` | `gh` 조회 |
+
+**오른쪽 칸은 사고가 아니라 선택이다.** 되돌릴 수 있는 명령에 수십 번 프롬프트를 띄우면
+마찰만 크고 안전 가치는 거의 없다 — 세션 자체가 이미 승인된 작업이다.
+
+#### 🔴 발신 차단(`deny`)은 **표현할 수 없다**
+
+`Bash(*curl*-X POST*)`를 올바른 형태로 고치려면 `Bash(curl *)`뿐인데, 그러면 **모든 `curl`이 막힌다.**
+이 spec의 모든 Step 완료 판정이 `curl -sS -o /dev/null -w '%{http_code}'`로 HTTP 코드를 확인한다.
+
+**"POST는 막고 GET은 허용"을 prefix matching으로는 표현할 수 없다.**
+패턴을 잘못 쓴 것이 아니라 **구조적 한계**다. 그리고 패턴 방어가 성립해도 dagster-study가 실측한
+우회(`curl --json`, `python3 urlopen(data=…)`, 변수 조립 `-X${M}`, `scp`/`nc`)는 그대로 남는다.
+
+⇒ **이 저장소에 발신 차단은 없다.** 실제 방어선은 §9 층 4(사람)와 규율이다.
+
 ---
 
 ## 9. 테스트 전략
@@ -598,6 +640,7 @@ Docker Desktop을 설치하면 조용히 docker로 넘어가고, 환경변수로
 | 2. 서버 정적 | `.github/workflows/ci.yml` | 위 + `terraform validate` | 🟡 **사후 신호** — 아래 참조 |
 | 3. 단위 | `.tftest.hcl` | 변수 검증, `precondition` 로직, plan 수준 | 클러스터 불필요 |
 | 4. 수동 관문 | Step별 완료 판정 (§6) | `plan` 0-diff, 파드 Running, HTTP 200, 상태 전이 관측 | **사람** |
+| 5. 승인 게이트 | `.claude/settings.json` `permissions.ask` | **비가역 명령만** (R13) | 🟡 교정 후 라이브 프로브로 확인해야 유효 |
 
 **CI에는 인프라에 붙는 명령을 넣지 않는다** (§7-6 원칙 1).
 `terraform apply`·`kubectl`·`helm install`은 전부 층 4에 남긴다.
