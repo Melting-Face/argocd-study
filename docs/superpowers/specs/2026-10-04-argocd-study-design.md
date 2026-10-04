@@ -272,10 +272,45 @@ plan은 apply 이전이므로 `depends_on`으로도 풀리지 않는다.
 
 → **`argo/argo-cd` 차트의 `extraObjects`에 root Application을 넣는다** (차트 10.9.6에서 지원 확인).
 
-부수 효과가 전부 좋다:
-1. CRD 순서 문제 소멸 (같은 릴리스가 CRD와 함께 적용)
+기대한 부수 효과:
+1. ~~CRD 순서 문제 소멸 (같은 릴리스가 CRD와 함께 적용)~~ ← 🔴 **틀렸다. 아래 정정 참조**
 2. `var.repo_url`이 진짜로 한 곳에만 남는다
 3. Terraform 리소스가 2개로 줄어 플랫폼 스택이 더 얇아진다
+
+#### 🔴 D5 정정 — `extraObjects` 는 작동하지 않는다 (2026-10-05 실측)
+
+Task 6 구현에서 100% 재현되는 실패가 났고, 원인을 교차 확인했다.
+
+```
+$ helm template argo-cd argo/argo-cd --version 10.9.6 | grep -B3 'kind: CustomResourceDefinition'
+# Source: argo-cd/templates/crds/crd-application.yaml
+# Source: argo-cd/templates/crds/crd-applicationset.yaml
+# Source: argo-cd/templates/crds/crd-appproject.yaml
+```
+
+**CRD가 차트 최상위 `crds/` 가 아니라 `templates/crds/` 에 있다.**
+Helm은 최상위 `crds/` 디렉터리만 템플릿보다 **먼저** 설치한다. CRD가 일반 템플릿이면
+모든 것이 한 번에 적용되고, **같은 릴리스 안에서 CRD와 그 CRD를 쓰는 CR을 함께 만들 수 없다**
+(`ensure CRDs are installed first`). 재시도해도 같고 부분 생성도 없다.
+
+위의 "부수 효과 1"은 **정확히 거꾸로였다** — 같은 릴리스인 것이 해결이 아니라 **문제**였다.
+`kubernetes_manifest` 의 plan 시점 CRD 의존을 피하려다 apply 시점 CRD 의존으로 옮겨간 셈이다.
+
+#### 채택한 해법 — root Application 전용 최소 로컬 chart
+
+```
+terraform/platform/
+├── argocd.tf
+│     helm_release "argo_cd"    (차트 10.9.6, CRD 포함)
+│     helm_release "root_app"   (로컬 chart, depends_on = [argo_cd], wait = true)
+└── charts/root-app/            ← Application 한 개만 담는 최소 chart
+```
+
+**D5의 본질은 지켜진다** — `kubernetes_manifest` 를 쓰지 않으므로 plan 시점에 API 서버
+스키마 조회가 없다. 바뀐 것은 "한 릴리스"가 "두 릴리스"가 된 것뿐이고,
+`depends_on` + `wait = true` 가 CRD 설치 완료를 보장한다.
+
+**대가**: 유지보수할 로컬 chart가 하나 늘었다(원안이면 0개). 대안이 없어 수용한다.
 
 ### D6. substrate 중립화
 
@@ -575,6 +610,8 @@ terraform -chdir=terraform/platform  apply
 | R11 | `tehcyx/kind`는 커뮤니티 프로바이더 | 저 | 중 | 버전 고정. 끊기면 substrate 계약 덕에 `k3d`/`existing`으로 교체 | 구조로 흡수 |
 | R12 | `*.localtest.me` 외부 DNS 의존 | 저 | 저 | 폴백: `/etc/hosts` 또는 `nip.io` (둘 다 실측 확인) | 없음 |
 | R13 | **승인 게이트가 없다** — `permissions.ask`/`deny` 패턴이 전부 무효였다 | 고 | 고 | 비가역 명령만 올바른 형태로 교정. 일상 명령은 **의도적으로 게이트 없음** | 🔴 아래 상세 |
+| R14 | **D5 `extraObjects` 가 작동하지 않았다** — 차트 CRD가 `templates/crds/` 에 있어 같은 릴리스로 CR을 못 만든다 | — | — | root Application 전용 로컬 chart를 두 번째 `helm_release` 로 분리 | ✅ 해소 (§5 D5 정정) |
+| R15 | **repo-server 가 liveness probe 로 반복 재시작** — 차트 기본 `timeoutSeconds: 1` 이 단일 노드 kind 에서 `/healthz?full=true` 에 부족 | 고 | 중 | probe 타임아웃 상향 | 🔴 Task 8의 **복구 지연 측정을 오염**시킨다 |
 
 ### R1 상세 — podman 선택에 `KIND_EXPERIMENTAL_PROVIDER`가 안 먹는다
 
