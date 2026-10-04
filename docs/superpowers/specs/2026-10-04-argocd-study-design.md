@@ -595,12 +595,37 @@ Docker Desktop을 설치하면 조용히 docker로 넘어가고, 환경변수로
 | 층 | 수단 | 대상 | 실효 |
 | --- | --- | --- | --- |
 | 1. 로컬 정적 | pre-commit ~17훅 | `terraform fmt`, `tflint`, `yamllint`, `helm lint`, `helmfile lint`, `gitleaks`, `doc-lint` | **실수 방지** — `--no-verify`로 우회 가능 |
-| 2. 서버 정적 | `.github/workflows/ci.yml` | 위 + `terraform validate` | **봉쇄** — 우회 불가 |
+| 2. 서버 정적 | `.github/workflows/ci.yml` | 위 + `terraform validate` | 🟡 **사후 신호** — 아래 참조 |
 | 3. 단위 | `.tftest.hcl` | 변수 검증, `precondition` 로직, plan 수준 | 클러스터 불필요 |
 | 4. 수동 관문 | Step별 완료 판정 (§6) | `plan` 0-diff, 파드 Running, HTTP 200, 상태 전이 관측 | **사람** |
 
 **CI에는 인프라에 붙는 명령을 넣지 않는다** (§7-6 원칙 1).
 `terraform apply`·`kubectl`·`helm install`은 전부 층 4에 남긴다.
+
+### 🔴 정정 — 층 2는 "봉쇄"가 아니다 (2026-10-04 실측)
+
+이 표는 처음에 층 2를 **"봉쇄 — 우회 불가"** 로 적었다. **틀렸다.**
+
+`gh api repos/Melting-Face/argocd-study/branches/main/protection` → `Branch not protected` (404).
+`main` 에 **branch protection 도 required status check 도 없고**, 우리는 PR 없이 직접 푸시한다.
+그래서 CI 는 **커밋이 이미 공개된 뒤에** 도는 사후 신호이고, 빨간 X 가 떠도 아무것도 막지 못한다.
+층 1 과 층 2 의 차이는 "우회 가능 여부"가 아니라 **`--no-verify` 로 건너뛸 수 있는가**뿐이다.
+
+| | 층 1 (pre-commit) | 층 2 (CI) |
+| --- | --- | --- |
+| 실행 시점 | 커밋 **전** | 푸시 **후** |
+| `--no-verify` | 건너뛸 수 있다 | 무관(서버에서 돈다) |
+| 공개를 막는가 | ❌ (로컬 커밋만 막는다) | ❌ (이미 공개됐다) |
+| 클론이 훅을 안 깔았으면 | ❌ 전부 무력 | ✅ 그래도 돈다 |
+
+**층 2 의 실효는 "봉쇄"가 아니라 "훅을 안 깐 클론에서도 돈다"는 것 하나다.**
+
+봉쇄로 올리려면 ① PR 흐름으로 바꾸고 ② `main` 에 required status check 를 건다.
+**지금은 하지 않는다** — 1인 스터디에서 PR 왕복이 학습보다 비싸고,
+무엇보다 **GitOps 가 `main` 에 직접 커밋하는 흐름을 전제**한다(Step 1·2 가 그 위에 선다).
+🔴 **이 선택의 대가는 "기계 봉쇄가 없다"는 것이고, 실제 마지막 방어선은 사람이다.**
+이 문단이 그 사실을 적는 자리이며, 「막혀 있다」로 쓰지 않기로 한 규율
+(dagster-study `publishing.md` §7)의 이행이다.
 
 ---
 
