@@ -1,0 +1,14 @@
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+crash.log
+
+# kubeconfig
+*.kubeconfig
+kubeconfig*
+
+# 로컬
+.DS_Store
