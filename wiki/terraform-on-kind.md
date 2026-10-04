@@ -120,6 +120,25 @@ terraform plan                             # No changes. 복구 확인
 **지어내지 않았다** — 두 에러 메시지와 복구 2단계 모두 이 세션에서 실제로 관측한
 그대로다.
 
+## 덤 — "대상 0개라 Skipped"를 통과로 읽으면 안 된다
+
+이 스택이 추가되기 전(Task 1~3), `.pre-commit-config.yaml`의 `terraform_tflint` 훅은
+`.tf` 파일이 저장소에 0개라 **대상이 없어 매번 Skipped**였다. 그런데 그 훅은 사실
+tflint 바이너리가 PATH에 있어야만 도는데, **어느 머신에도 tflint가 설치돼 있지
+않았다.** "Skipped"가 초록불처럼 보여 이 구멍이 전혀 드러나지 않았다.
+
+이 디렉터리의 `.tf` 파일이 처음 생기면서 그 구멍이 로컬과 CI 양쪽에서 동시에
+터졌다(`ERROR: 'tflint' is required ... but it is not discoverable in the system's
+PATH`). 교훈: **"대상 0개라 Skipped"는 "그 검사가 통과했다"가 아니라 "그 검사를
+아직 아무도 돌려보지 않았다"는 뜻이다.** 새 파일 종류를 추가할 때는 그 종류를
+대상으로 하는 훅이 실제로 도구를 찾아 실행되는지 한 번은 직접 확인해야 한다.
+
+고친 방법: `.pre-commit-config.yaml`의 `terraform_tflint` 훅에
+`--hook-config=--tool-version=0.64.0`을 추가해, pre-commit이 시스템 설치에
+기대지 않고 **직접 그 버전을 내려받아 캐시**하게 했다 — 클론 직후 상태에서도
+작동해야 한다는 기준으로 골랐다(`ci.yml`에 설치 스텝을 추가하는 대안은 CI만
+고치고 로컬 클론은 여전히 깨진 채로 둔다).
+
 ## 참고
 
 - `tehcyx/terraform-provider-kind`: `github.com/tehcyx/terraform-provider-kind`
