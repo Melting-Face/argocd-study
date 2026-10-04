@@ -1,0 +1,14 @@
+# gitlint 설정 (Conventional Commits).
+# gitlint 는 저장소 루트(CWD)에서 .gitlint / pyproject.toml 을 탐지한다.
+[general]
+# Conventional Commits 제목 규칙 강제: `type(scope): 설명` (표준 type 11종이 기본 적용)
+contrib=contrib-title-conventional-commits
+# 짧은 커밋엔 본문이 없을 수 있어 허용한다.
+ignore=body-is-missing
+# 🔴 빈 범위를 조용히 통과시키지 않는다 — 기본값 False 에서는 0커밋 검사 통과와
+#    N커밋 검사 통과의 출력이 같다(둘 다 무출력 exit 0). `--commits` 범위 모드에만
+#    걸리므로 commit-msg 훅(`--msg-filename`)에는 영향이 없다.
+fail-without-commits=true
+
+[title-max-length]
+line-length=72

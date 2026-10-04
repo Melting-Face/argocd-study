@@ -1,0 +1,12 @@
+# yamllint 설정.
+# yamllint 는 pyproject.toml 을 지원하지 않으므로 별도 파일로 관리한다.
+# pre-commit `yamllint` 훅이 이 설정을 자동 탐지한다.
+extends: default
+
+rules:
+    # 1줄 120자까지는 경고 없이 허용한다(brief 지정값).
+    line-length:
+        max: 120
+        level: warning
+    # GitHub Actions 워크플로 등은 관례상 `---` 문서 시작 표식을 쓰지 않는다 — 비활성화(brief 지정값).
+    document-start: disable

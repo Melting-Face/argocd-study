@@ -1,0 +1,81 @@
+# 정적 품질 게이트 — pre-commit 훅 16개.
+# 규칙의 단일 출처는 여기(그리고 각 훅 전용 설정 파일)이며,
+# .github/workflows/ci.yml 은 이 설정을 그대로 재실행할 뿐 규칙을 중복 정의하지 않는다.
+# 이후 모든 태스크의 커밋은 `pre-commit run --all-files` 를 통과해야 한다.
+#
+# doc-lint · doc-links 는 여기 없다 — scripts/doc_lint.py 가 아직 없어서다(Task 2 에서 추가).
+#
+# 🔴 벤더 디렉터리 전역 제외 — `.agents/skills/**` 는 skills-lock.json 이 `computedHash` 로
+#    고정한 외부 소스(obra/superpowers) 그대로의 콘텐츠다. 우리가 작성한 코드가 아니고,
+#    내용을 고치면 고정된 해시와 어긋난다. 실측(Step 4): 이 제외 없이 `--all-files` 를 돌리면
+#    `.agents/skills/subagent-driven-development/scripts/sdd-workspace` 에서 shellcheck
+#    SC1007 이 떠 벤더 스크립트 때문에 우리 게이트가 깨졌다 — 그래서 모든 훅에서 전역 제외한다.
+#    `.claude/skills/**` 는 `.agents/skills/**` 로의 심링크라 git 이 심링크 자체(경로 문자열)만
+#    추적하므로 별도로 적지 않아도 된다(실측: pre-commit 이 `.agents/skills/` 아래 실제
+#    파일만 잡았고 심링크 쪽에서는 아무 훅도 걸리지 않았다).
+exclude: '^\.agents/skills/'
+
+repos:
+  # 범용 위생 훅 — 공백·병합 충돌 표식·대용량 파일·구문 오류를 잡는다.
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-merge-conflict
+      - id: check-added-large-files
+      - id: check-toml
+      - id: check-yaml
+      - id: check-json
+      # 저장소가 public 이므로 이 훅이 실제 방어선이다 — PEM/OpenSSH 키 "파일" 자체의 포맷을 본다.
+      # gitleaks(아래)는 문자열 패턴을 보는 다른 축이라 역할이 겹치지 않는다.
+      - id: detect-private-key
+
+  # 시크릿 패턴 스캔 (규칙은 .gitleaks.toml) — 저장소가 public 이므로 실제 방어선이다.
+  # 🔴 패턴 방어는 봉쇄가 아니다 — 새로운 포맷의 키는 놓칠 수 있다.
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.0
+    hooks:
+      - id: gitleaks
+
+  # 커밋 메시지 Conventional Commits 검사 (규칙은 루트 .gitlint)
+  - repo: https://github.com/jorisroovers/gitlint
+    rev: v0.19.1
+    hooks:
+      - id: gitlint
+
+  # YAML 린트 (규칙은 .yamllint.yaml)
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.38.0
+    hooks:
+      - id: yamllint
+
+  # 셸 스크립트 린트 — Task 1 시점엔 scripts/*.sh 가 없어 대상 0개로 스킵된다.
+  # shellcheck-py 는 바이너리를 wheel 로 배포해 격리 venv 에 들어간다(로컬 설치 불필요).
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.11.0.1
+    hooks:
+      - id: shellcheck
+
+  # Terraform 포매터 + tflint(규칙은 .tflint.hcl).
+  # 훅 id 는 "terraform_tflint" 이지만 감싸는 도구는 brief 가 말하는 tflint 그 자체다.
+  # files 패턴이 `*.tf`/`*.tfvars` 로 한정돼 있어 Task 1 시점(.tf 파일 0개)에는
+  # 대상이 없어 자동으로 스킵된다 — 여기엔 별도 가드가 필요 없다.
+  #
+  # 🔴 terraform_validate 는 여기 넣지 않는다 — `validate`는 `init` 이 선행돼야 하는데
+  #    `.terraform/`은 .gitignore 대상이라 로컬에 없다. 훅에서 init 을 돌리면 커밋이
+  #    프로바이더 레지스트리 가용성에 묶인다. validate 는 CI 잡(.github/workflows/ci.yml)이
+  #    각 스택에서 `-backend=false` 로 init 한 뒤에 진다(Ruling R-A).
+  - repo: https://github.com/antonbabenko/pre-commit-terraform
+    rev: v1.109.0
+    hooks:
+      - id: terraform_fmt
+      - id: terraform_tflint
+
+  # Python 린트 + 포맷 (규칙은 추후 pyproject.toml [tool.ruff], Task 2 에서 .py 와 함께 추가)
+  # Task 1 시점엔 .py 파일이 없어 대상 0개로 스킵된다.
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.20
+    hooks:
+      - id: ruff-check
+      - id: ruff-format

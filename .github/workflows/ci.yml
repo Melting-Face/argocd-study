@@ -1,0 +1,112 @@
+name: ci
+
+# 서버측 정적 품질 게이트.
+# 로컬 pre-commit 은 "실수 방지"다 — `git commit --no-verify` 나 훅 미설치 클론이면
+# 전부 우회된다. 이 워크플로가 "봉쇄"다(우회 불가).
+#
+# 설계원칙 4개 (docs/superpowers/specs/2026-10-04-argocd-study-design.md §7-6 계승):
+#   1. 🔴 인프라에 붙는 명령을 넣지 않는다. 게이트가 클러스터 가용성에 묶이면 커밋이 막힌다.
+#      여기 있는 스텝은 전부 파일만 읽는다 — `terraform apply`·`kubectl`·`helm install` 금지.
+#   2. 🔴 크리덴셜은 명백히 가짜만 쓴다.
+#   3. 규칙의 단일 출처는 저장소 설정 파일이다
+#      (.pre-commit-config.yaml · .yamllint.yaml · .gitleaks.toml · .gitlint · .tflint.hcl).
+#      이 워크플로는 '무엇을 언제 실행할지'만 정하고 규칙을 재선언하지 않는다.
+#   4. 외부 도구는 액션이 아니라 러너에 직접 설치한다(terraform).
+#      `hashicorp/setup-terraform` 같은 마켓플레이스 액션을 쓰지 않는 이유가 이것이다 —
+#      JS 액션은 러너 Node 런타임에 묶여 deprecation 사이클마다 워크플로가 흔들린다.
+#      actions/checkout · actions/setup-python · actions/cache 는 예외다 — 특정 린트 "도구"의
+#      설치 액션이 아니라 GitHub 공식 러너 기반 인프라(체크아웃·언어런타임·캐시)다.
+#
+# Ruling R-A (2026-10-04, task-1-brief 보충 판정): 이 시점 저장소에는 .tf 파일이 0개다.
+# 아래 `terraform fmt`/`terraform validate` 스텝을 가드 없이 그대로 두면 fmt 는 0건에 대해
+# 의미 없이 통과하고 validate 는 init 할 대상이 없어 아예 실패한다. 그래서 두 스텝 모두
+# ".tf 파일 존재" 가드 뒤에 둔다. Task 4 에서 terraform/ 스택이 생기면 가드가 자연히 열린다.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# 같은 ref 에 새 푸시가 오면 진행 중인 검사를 취소한다(러너 낭비 방지).
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+# terraform 버전의 단일 출처 — fmt·validate 두 스텝이 같은 바이너리를 쓴다.
+env:
+  TERRAFORM_VERSION: "1.15.8"
+
+jobs:
+  lint:
+    name: 린트 · 포맷 · 시크릿 · terraform 정적 검증
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # pre-commit·ruff·gitlint·yamllint 등 린트 도구를 돌리기 위한 런타임일 뿐,
+      # 저장소 자체의 Python 요구 버전과는 별개다(그쪽은 Task 2 에서 pyproject.toml 이 정한다).
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      # 원칙 4: terraform 은 액션이 아니라 러너에 직접 설치한다. SHA256SUMS 로 체크섬을 대조한다.
+      # 🔴 terraform_fmt/terraform_tflint 훅과 아래 fmt/validate 스텝이 모두 이 바이너리를 쓴다 —
+      #    .tf 파일이 아직 없어 당장은 호출되지 않지만, 가드가 열리는 Task 4 를 대비해 매번 설치한다.
+      - name: terraform 설치 (env.TERRAFORM_VERSION)
+        run: |
+          set -euo pipefail
+          cd "$(mktemp -d)"
+          base="https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}"
+          zip="terraform_${TERRAFORM_VERSION}_linux_amd64.zip"
+          curl -fsSLO "${base}/${zip}"
+          curl -fsSLO "${base}/terraform_${TERRAFORM_VERSION}_SHA256SUMS"
+          grep " ${zip}\$" "terraform_${TERRAFORM_VERSION}_SHA256SUMS" | sha256sum -c -
+          # 마지막 인자로 뽑을 파일을 지정한다 — zip 에는 LICENSE.txt 도 들어 있어
+          # 생략하면 그것까지 /usr/local/bin 에 풀린다.
+          sudo unzip -o -d /usr/local/bin "${zip}" terraform
+          terraform version
+
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
+
+      - run: python -m pip install --upgrade pre-commit
+
+      # 규칙 재선언 없음(원칙 3) — 각 훅의 규칙은 .pre-commit-config.yaml 이 가리키는
+      # 전용 설정 파일(.yamllint.yaml 등)이 단일 출처다.
+      - name: pre-commit (전체 훅)
+        run: pre-commit run --all-files --show-diff-on-failure
+
+      # Ruling R-A: .tf 파일이 없으면 스킵한다(위 머리 주석 참고).
+      - name: terraform fmt -check (전체 재귀)
+        run: |
+          set -euo pipefail
+          if find . -name '*.tf' -not -path '*/.terraform/*' -print -quit | grep -q .; then
+            terraform fmt -check -recursive
+          else
+            echo "::notice::.tf 파일 없음 — terraform fmt 스킵 (Task 4에서 스택 추가 예정)"
+          fi
+
+      # Ruling R-A: -backend=false 로 init 해 state 백엔드 접속 없이 프로바이더만 내려받는다
+      # (크리덴셜 불필요 — 원칙 1·2 유지). 스택 디렉터리는 .tf 파일을 포함한 디렉터리로 찾는다 —
+      # 디렉터리 구조는 Task 4 가 정하므로 여기서 이름을 미리 고정하지 않는다.
+      - name: terraform validate (스택별 init -backend=false 후)
+        run: |
+          set -euo pipefail
+          if ! find . -name '*.tf' -not -path '*/.terraform/*' -print -quit | grep -q .; then
+            echo "::notice::.tf 파일 없음 — terraform validate 스킵 (Task 4에서 스택 추가 예정)"
+            exit 0
+          fi
+          found=0
+          for dir in $(find . -name '*.tf' -not -path '*/.terraform/*' -exec dirname {} \; | sort -u); do
+            found=$((found + 1))
+            echo "::group::${dir}"
+            terraform -chdir="${dir}" init -backend=false -input=false -no-color
+            terraform -chdir="${dir}" validate -no-color
+            echo "::endgroup::"
+          done
+          echo "검증한 스택: ${found}개"
