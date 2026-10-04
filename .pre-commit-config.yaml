@@ -4,17 +4,6 @@
 # 이후 모든 태스크의 커밋은 `pre-commit run --all-files` 를 통과해야 한다.
 #
 # doc-lint · doc-links 는 여기 없다 — scripts/doc_lint.py 가 아직 없어서다(Task 2 에서 추가).
-#
-# 🔴 벤더 디렉터리 전역 제외 — `.agents/skills/**` 는 skills-lock.json 이 `computedHash` 로
-#    고정한 외부 소스(obra/superpowers) 그대로의 콘텐츠다. 우리가 작성한 코드가 아니고,
-#    내용을 고치면 고정된 해시와 어긋난다. 실측(Step 4): 이 제외 없이 `--all-files` 를 돌리면
-#    `.agents/skills/subagent-driven-development/scripts/sdd-workspace` 에서 shellcheck
-#    SC1007 이 떠 벤더 스크립트 때문에 우리 게이트가 깨졌다 — 그래서 모든 훅에서 전역 제외한다.
-#    `.claude/skills/**` 는 `.agents/skills/**` 로의 심링크라 git 이 심링크 자체(경로 문자열)만
-#    추적하므로 별도로 적지 않아도 된다(실측: pre-commit 이 `.agents/skills/` 아래 실제
-#    파일만 잡았고 심링크 쪽에서는 아무 훅도 걸리지 않았다).
-exclude: '^\.agents/skills/'
-
 repos:
   # 범용 위생 훅 — 공백·병합 충돌 표식·대용량 파일·구문 오류를 잡는다.
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -39,6 +28,12 @@ repos:
       - id: gitleaks
 
   # 커밋 메시지 Conventional Commits 검사 (규칙은 루트 .gitlint)
+  # 🔴 업스트림 정의가 `stages: [commit-msg]` 라 **`pre-commit run --all-files` 로는 실행되지
+  #    않는다**(실측 — 목록에 이 훅 자체가 안 뜬다). 로컬에서 실제로 작동시키려면
+  #    `pre-commit install --hook-type commit-msg` 를 **별도로** 돌려 `.git/hooks/commit-msg`
+  #    를 깔아야 한다(`pre-commit install` 단독은 기본 pre-commit 스테이지만 깐다).
+  #    그마저도 `git commit --no-verify` 로 우회 가능한 로컬 훅일 뿐이다 — CI 쪽 한계는
+  #    .github/workflows/ci.yml 머리 주석을 본다.
   - repo: https://github.com/jorisroovers/gitlint
     rev: v0.19.1
     hooks:
@@ -56,6 +51,21 @@ repos:
     rev: v0.11.0.1
     hooks:
       - id: shellcheck
+        # 🔴 이 훅에만 거는 제외다(전역 exclude 아님) — `.agents/skills/**` 는 skills-lock.json 이
+        #    `computedHash` 로 고정한 외부 소스(obra/superpowers) 그대로의 콘텐츠라 우리가
+        #    작성한 코드가 아니고, 내용을 고치면 고정된 해시와 어긋난다.
+        #    실측(2026-10-04): 이 제외 없이 `--all-files` 를 돌리면
+        #    `.agents/skills/subagent-driven-development/scripts/sdd-workspace` 에서
+        #    shellcheck SC1007 로 깨졌다 — shellcheck 는 "스타일을 고쳐라"는 보고라
+        #    벤더 코드 스타일에 우리 게이트가 매여서는 안 된다.
+        #    `.claude/skills/**` 는 `.agents/skills/**` 로의 심링크라 git 이 심링크 자체
+        #    (경로 문자열)만 추적하므로 별도로 적지 않아도 된다(실측: 심링크 쪽에서는
+        #    아무 훅도 걸리지 않았다).
+        # ⚠️ gitleaks·detect-private-key 는 **여기서 제외하지 않는다** — 그 둘은 "파일을 고쳐라"가
+        #    아니라 "시크릿이 있는지 보고한다"이고, 저장소가 public 이라 실제 방어선(spec R9)이다.
+        #    탐지기는 벤더 콘텐츠를 고치지 않으므로 skills-lock.json 의 고정 해시와 충돌하지
+        #    않는다 — 벤더 디렉터리를 영구 사각지대로 남길 이유가 없다.
+        exclude: '^\.agents/skills/'
 
   # Terraform 포매터 + tflint(규칙은 .tflint.hcl).
   # 훅 id 는 "terraform_tflint" 이지만 감싸는 도구는 brief 가 말하는 tflint 그 자체다.

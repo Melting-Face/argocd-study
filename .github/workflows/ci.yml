@@ -21,6 +21,15 @@ name: ci
 # 아래 `terraform fmt`/`terraform validate` 스텝을 가드 없이 그대로 두면 fmt 는 0건에 대해
 # 의미 없이 통과하고 validate 는 init 할 대상이 없어 아예 실패한다. 그래서 두 스텝 모두
 # ".tf 파일 존재" 가드 뒤에 둔다. Task 4 에서 terraform/ 스택이 생기면 가드가 자연히 열린다.
+#
+# 🔴 한계 — 이 워크플로는 커밋 "메시지"(Conventional Commits, .gitlint 규칙)를 검사하지
+#    않는다. 의도적으로 뺐다: 브랜치는 main 이고 여기엔 **직접 push**하므로(PR 리뷰 단계가
+#    없다), commit-msg 검사는 커밋이 **이미 공개된 뒤**에야 CI 잡으로 뜬다 — 그 시점의 빨간
+#    X는 공개 이력을 다시 쓰지 않는 한 아무도 조치할 수 없는, 기계 강제가 아닌 신호다.
+#    gitlint 는 로컬 commit-msg 훅으로만 작동한다(.pre-commit-config.yaml 의 gitlint 항목
+#    주석 참고) — `pre-commit install --hook-type commit-msg` 를 깐 사람에게만 적용되고,
+#    `git commit --no-verify` 로 우회 가능하다. **기계 강제가 없는 규칙을 "막혀 있다"로
+#    쓰지 않는다** — 그래서 가짜 CI 게이트를 세우는 대신 이 한계를 여기 적어 둔다.
 
 on:
   pull_request:
