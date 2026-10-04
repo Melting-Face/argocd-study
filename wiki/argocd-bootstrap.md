@@ -181,7 +181,9 @@ podman machine(8 CPU / 26 GB, `lakehouse`와 공유)에서 정상 운영 범위�
 기본값은 `resources.requests/limits`를 지정하지 않는다(BestOffort QoS) — Phase 1
 은 학습 환경이라 그대로 뒀다.
 
-**🔴 관측된 이상 징후 — `repo-server` 재시작 12회(103분 동안).** 원인은
+**🔴 관측된 이상 징후 — `repo-server`가 반복적으로 재시작한다**(최초 관측
+103분 동안 12회, 이 노트를 마무리하는 5시간여 시점엔 38회로 계속 늘었다 —
+한 번의 일시적 현상이 아니라 **지속되는 패턴**이다). 원인은
 `kubectl describe pod`로 확인한 **liveness probe 타임아웃**이다:
 
 ```
