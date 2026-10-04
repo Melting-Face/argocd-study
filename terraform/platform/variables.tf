@@ -47,31 +47,30 @@ variable "ingress_profile" {
   }
 }
 
-# substrate 계약 4개 중 하나라 Task 5 는 아직 참조하지 않지만, "계약을 온전히 받는다"는
-# 것 자체가 이 스택의 역할이라 미사용이어도 선언해 둔다(Task 6 이전에 PVC 를 쓰는 리소스가
-# 없다). Task 6 이 참조를 추가하면 이 ignore 주석은 지운다.
+# substrate 계약 4개 중 하나라 아직 참조하지 않지만, "계약을 온전히 받는다"는 것 자체가
+# 이 스택의 역할이라 미사용이어도 선언해 둔다. Task 6(ArgoCD) 도 확인 결과 PVC 를 쓰는
+# 리소스가 없어(기본 설치 컴포넌트 7개 — server/repo-server/application-controller/redis/
+# dex-server/notifications-controller/applicationset-controller — 전부 PVC 미사용) 여전히
+# 참조하지 않는다. Step 4 Airflow(PVC 필요)가 참조를 추가하면 이 ignore 주석은 지운다.
 # tflint-ignore: terraform_unused_declarations
 variable "storage_class" {
   description = <<-EOT
     이 substrate 가 기본 제공하는 StorageClass 이름. terraform/cluster/kind 의 output
     "storage_class" 와 같은 이름·같은 값이어야 한다(substrate 계약, terraform_remote_state
-    를 쓰지 않는 대가로 양쪽에 중복 선언한다). 이 스택(Task 5)은 아직 쓰지 않지만, Task 6 이
-    Airflow 등 PVC 가 필요한 워크로드를 다루기 전에 선언을 먼저 맞춰 둔다.
+    를 쓰지 않는 대가로 양쪽에 중복 선언한다). Task 6(ArgoCD)까지는 PVC 를 쓰는 워크로드가
+    없어 아직 쓰지 않는다. 후속 Step 4 Airflow 가 PVC 를 쓰는 시점에 참조가 추가된다.
   EOT
   type        = string
   default     = "standard"
 }
 
-# brief 요구사항 — Task 6(argocd.tf)이 쓸 repo_url 을 "선언이 사용보다 앞선다" 원칙에 따라
-# 여기서 먼저 선언하고 validation 을 테스트로 고정한다. Task 6 이 참조를 추가하면 이 ignore
-# 주석은 지운다.
-# tflint-ignore: terraform_unused_declarations
+# Task 5 가 "선언이 사용보다 앞선다" 원칙에 따라 먼저 선언했고, 이제 Task 6(argocd.tf 의
+# templatefile)이 실제로 참조한다 — tflint-ignore 는 더 이상 필요 없어 지웠다.
 variable "repo_url" {
   description = <<-EOT
-    ArgoCD root Application 이 추적할 Git 저장소 URL. 이 스택(Task 5)은 쓰지 않지만
-    Task 6(argocd.tf)이 쓰므로 선언을 여기서 먼저 고정한다(선언이 사용보다 앞선다).
-    HTTPS 여야 한다 — ArgoCD 가 무인증 public fetch 를 하려면 SSH(git@...) 키 자격증명
-    없이 접근 가능해야 하기 때문이다.
+    ArgoCD root Application 이 추적할 Git 저장소 URL. argocd.tf 의 templatefile() 이
+    values/argocd.yaml.tftpl 의 $${repo_url} 자리에 주입한다. HTTPS 여야 한다 — ArgoCD 가
+    무인증 public fetch 를 하려면 SSH(git@...) 키 자격증명 없이 접근 가능해야 하기 때문이다.
   EOT
   type        = string
   default     = "https://github.com/Melting-Face/argocd-study.git"
@@ -83,20 +82,19 @@ variable "repo_url" {
 }
 
 # cluster 스택과 값이 일치해야 하는 중복 변수. 이 스택의 리소스는 이 포트로 직접 트래픽을
-# 보내지 않고(포트 매핑은 cluster 스택 소관), Task 6 의 argocd_url output 이 참조한다.
-# Task 6 이 참조를 추가하면 이 ignore 주석은 지운다.
-# tflint-ignore: terraform_unused_declarations
+# 보내지 않지만(포트 매핑은 cluster 스택 소관), outputs.tf 의 argocd_url output 이
+# 이제 실제로 참조한다 — tflint-ignore 는 더 이상 필요 없어 지웠다.
 variable "http_host_port" {
   description = <<-EOT
     컨트롤 판정(terraform plan/apply 완료 후 curl)에 쓰는, 호스트에서 ingress-nginx 로
     들어가는 HTTP 포트. terraform/cluster/kind 의 같은 이름 변수(extra_port_mappings 의
     실제 호스트 포트)와 값이 일치해야 한다 — 이 스택은 그 포트로 트래픽을 보내지 않지만
-    (포트 매핑 자체는 cluster 스택 소관), Task 6 의 argocd_url output 이 이 값으로 URL 을
+    (포트 매핑 자체는 cluster 스택 소관), outputs.tf 의 argocd_url output 이 이 값으로 URL 을
     조립한다. terraform_remote_state 를 쓰지 않는 대가로 양쪽에 중복 선언한다.
 
     🔴 어긋나면 무슨 일이 나는가: cluster 스택이 실제로 연 호스트 포트(예: 8081)와
-    이 값(예: 기본값을 바꾸지 않아 생긴 8082 같은 불일치)이 다르면, Task 6 의
-    argocd_url output 은 "조용히 틀린 포트"로 URL 을 조립한다. 사용자는
+    이 값(예: 기본값을 바꾸지 않아 생긴 8082 같은 불일치)이 다르면, argocd_url output 은
+    "조용히 틀린 포트"로 URL 을 조립한다. 사용자는
     `connection refused`만 보고, 원인이 "두 스택의 변수 불일치"라는 걸 URL 문자열만
     봐서는 알 수 없다. 게다가 kind 의 extra_port_mappings 는 클러스터 **생성 시점**에만
     정할 수 있어, cluster 쪽 값을 바로잡으려면 이 변수만 고치는 게 아니라

@@ -4,7 +4,7 @@
 
 **ArgoCD 축**
 
-(노트 없음 — 추가되면 여기에 올린다)
+- [argocd-bootstrap](argocd-bootstrap.md)
 
 **Terraform · Helm · Helmfile 축**
 

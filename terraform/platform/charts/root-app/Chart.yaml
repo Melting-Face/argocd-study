@@ -1,0 +1,11 @@
+# root Application 전용 최소 Helm chart. argo-cd 차트의 extraObjects 에 Application CR 을
+# 함께 넣으면(원래 brief/spec D5 안) CRD 와 그 CRD 를 쓰는 CR 을 같은 helm install 로 만드는
+# 셈이 되어 apply 시점에 100% 재현되는 실패가 난다(실측 — 상세는
+# terraform/platform/values/argocd.yaml.tftpl 주석과 wiki/argocd-bootstrap.md 참고).
+# 이 chart 는 그 CR 하나만 만드는 용도로 분리했다 — helm_release.argo_cd 가 CRD 설치를
+# 끝낸 뒤(depends_on + wait) 적용되므로 같은 문제가 생기지 않는다.
+apiVersion: v2
+name: root-app
+description: ArgoCD root Application 하나만 만드는 최소 chart (kubernetes_manifest 미사용, D5 유지)
+type: application
+version: 0.1.0

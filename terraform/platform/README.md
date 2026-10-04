@@ -1,9 +1,15 @@
-# terraform/platform — 플랫폼 스택 (ingress-nginx · Task 6 의 ArgoCD)
+# terraform/platform — 플랫폼 스택 (ingress-nginx · ArgoCD)
 
-이 디렉터리는 **플랫폼**(클러스터 위에서 돌아가는 공통 인프라)을 소유한다. 지금은
-ingress-nginx 하나지만(Task 5), Task 6 이 `argocd.tf`와 `values/argocd.yaml.tftpl`을
-같은 스택에 더한다. `gitops/` 아래 애플리케이션은 이 스택이 아니라 ArgoCD 가 소유한다
-(spec §3-1).
+이 디렉터리는 **플랫폼**(클러스터 위에서 돌아가는 공통 인프라)을 소유한다.
+ingress-nginx(Task 5)에 더해 ArgoCD 와 root Application 1개(Task 6)를 담는다.
+`gitops/` 아래 애플리케이션은 이 스택이 아니라 ArgoCD 가 소유한다(spec §3-1).
+
+ArgoCD 는 `argo-cd` chart(10.9.6 = ArgoCD v3.5.3)를 `helm_release.argo_cd`로,
+root Application 은 이 저장소 소유의 최소 chart(`charts/root-app/`)를
+`helm_release.root_app`로 **별도 릴리스**에 설치한다 — 원래 설계(extraObjects 에
+root Application 을 함께 넣는 안)는 실측으로 깨졌다(CRD 와 그 CRD 를 쓰는 CR 을
+같은 `helm install`로 만들 수 없다는 Helm 의 제약). 상세는
+[`wiki/argocd-bootstrap.md`](../../wiki/argocd-bootstrap.md) 참고.
 
 ## 계약 — substrate 로부터 variable 로 받는 값
 
@@ -24,10 +30,10 @@ ingress-nginx 하나지만(Task 5), Task 6 이 `argocd.tf`와 `values/argocd.yam
 
 그 외 이 스택이 직접 선언하는 변수:
 
-- `repo_url` — Task 6 의 ArgoCD root Application 이 쓴다. HTTPS 고정(validation).
-  선언이 사용보다 앞선다(Task 5 에서 먼저 선언, Task 6 에서 참조).
+- `repo_url` — ArgoCD root Application 이 쓴다(`helm_release.root_app`의 `set`
+  블록). HTTPS 고정(validation).
 - `http_host_port` — cluster 스택의 같은 이름 변수(`extra_port_mappings`의 실제 호스트
-  포트)와 **값이 일치해야 한다**. 기본 `8081`. Task 6 의 `argocd_url` output 이 쓴다.
+  포트)와 **값이 일치해야 한다**. 기본 `8081`. `argocd_url` output 이 쓴다.
 
 ## 사용
 
@@ -39,7 +45,7 @@ terraform test                                   # 변수 검증 단위 테스�
 terraform apply -var-file=local.auto.tfvars
 ```
 
-## 완료 판정
+## 완료 판정 — ingress-nginx
 
 ```bash
 kubectl get pods -n ingress-nginx                                 # controller Running
@@ -52,6 +58,23 @@ terraform plan -var-file=local.auto.tfvars                        # No changes
 라우팅할 Ingress 가 없다는 뜻이다. `connection refused`가 나오면 포트 매핑
 (cluster 스택의 `extra_port_mappings`) 또는 `controller.hostPort.enabled`가 잘못된
 것이다.
+
+## 완료 판정 — ArgoCD
+
+```bash
+kubectl get pods -n argocd                                        # 7개 컴포넌트 전부 Running
+kubectl get ingress -n argocd                                     # ADDRESS 할당
+curl -sS -o /dev/null -w '%{http_code}\n' http://argocd.localtest.me:8081   # 200
+terraform output argocd_initial_admin_password_command            # 조회 명령 문자열 (값 아님)
+argocd login argocd.localtest.me:8081 --username admin --plaintext
+argocd app list                                                   # root 가 보인다
+terraform plan -var-file=local.auto.tfvars                        # No changes
+```
+
+🔑 **200 이 성공이고, port-forward 를 쓰지 않았다는 것이 spec 성공 기준 1번이다.**
+`argocd login`은 `--insecure`가 아니라 `--plaintext`가 통한다(실측·근거:
+[`wiki/argocd-bootstrap.md`](../../wiki/argocd-bootstrap.md)) — `server.insecure: true` +
+Ingress `tls: false` 조합이 TLS 자체를 안 쓰는 평문 HTTP 서버이기 때문이다.
 
 ## DNS 판정 — `*.localtest.me`
 
@@ -92,8 +115,8 @@ dig +short podinfo.localtest.me    # 기대: 127.0.0.1
    http://argocd.127.0.0.1.nip.io:8081
    ```
 
-   이 경우 `values/ingress-nginx.*.yaml`을 바꾸는 게 아니라, Task 6 의 ArgoCD
-   Ingress `host` 필드(또는 해당 애플리케이션의 Ingress `host`)를 `nip.io` 형태로
+   이 경우 `values/ingress-nginx.*.yaml`을 바꾸는 게 아니라, ArgoCD Ingress
+   `host` 필드(또는 해당 애플리케이션의 Ingress `host`)를 `nip.io` 형태로
    바꿔야 한다 — Ingress 쪽 호스트명 매칭 규칙이기 때문이다.
 
 ### 이 환경의 실측
@@ -120,4 +143,8 @@ $ dig +short podinfo.localtest.me
 ## 알려진 제약
 
 - `terraform destroy`는 이 README 작성 시점 기준 실행하지 않았다 — 이 클러스터가
-  Task 6~8 의 전제라 비가역 명령을 피했다(Task 5 brief 의 승인 게이트 경고 참고).
+  이후 과제의 전제라 비가역 명령을 피했다(승인 게이트가 사실상 없다는 spec R13
+  판정 참고).
+- 이 저장소는 public 이라 ArgoCD root Application 에 repo 자격증명을 넣지 않았다.
+  private 로 전환했을 때의 거동은 **실제로 전환해 확인하지 않았다** — 미확인으로
+  남긴다([`wiki/argocd-bootstrap.md`](../../wiki/argocd-bootstrap.md) Review Focus (3)).

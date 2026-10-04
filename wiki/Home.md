@@ -16,11 +16,11 @@ ArgoCD·Terraform·Helm·Helmfile 네 도구를 한 저장소에서 다루는
 
 ## 지금 상태
 
-스택 A(kind 클러스터)를 세우며 첫 노트 2장이 생겼다. 둘 다 **Terraform·Helm·
-Helmfile 축**에 속한다. 나머지 구간은 이후 과제가 진행되며 채워진다.
+스택 A(kind 클러스터)와 스택 B(ingress-nginx·ArgoCD)를 세우며 노트 3장이
+생겼다. 나머지 구간은 이후 과제가 진행되며 채워진다.
 
-- **ArgoCD 축** — 부트스트랩 → 첫 애플리케이션 → 드리프트와 self-heal →
-  소스 타입(Helm/Helmfile/plain manifest) → Airflow 배포
+- **ArgoCD 축** — [부트스트랩](argocd-bootstrap.md) → 첫 애플리케이션 →
+  드리프트와 self-heal → 소스 타입(Helm/Helmfile/plain manifest) → Airflow 배포
 - **Terraform·Helm·Helmfile 축** — [kind 위의 Terraform](terraform-on-kind.md),
   [스택 경계와 폭발반경](terraform-stack-boundaries.md), Helm 차트 작성,
   Helmfile과 Terraform의 비교

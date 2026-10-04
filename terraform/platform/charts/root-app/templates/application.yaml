@@ -1,0 +1,29 @@
+# root Application — gitops/apps/ 를 directory.recurse 로 읽는다. syncPolicy.automated 로
+# 시작한다(brief 가 Step 0/root 는 automated 로 두고, 수동 sync 관찰은 Step 1(podinfo,
+# Task 7)부터 하기로 했다).
+#
+# 🔴 아래 문자열 값은 quote 파이프 함수 대신 리터럴 큰따옴표로 감쌌다 — 파이프
+# 함수만 쓰면 렌더링 전 원본 파일의 템플릿 표현식이 따옴표 없이 남아,
+# pre-commit 의 check-yaml/yamllint 가 이중 중괄호를 중첩된 flow-mapping 으로
+# 오해해 "found unhashable key"로 깨진다(실측). 리터럴 따옴표로 감싸면 원본도
+# 유효한 YAML 문자열이고, 렌더링 후에도 올바르게 따옴표 쳐진 문자열이 된다.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root
+  namespace: "{{ .Values.namespace }}"
+spec:
+  project: default
+  source:
+    repoURL: "{{ .Values.repoUrl }}"
+    targetRevision: "{{ .Values.targetRevision }}"
+    path: "{{ .Values.path }}"
+    directory:
+      recurse: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: "{{ .Values.namespace }}"
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
