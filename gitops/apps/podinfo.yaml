@@ -22,7 +22,9 @@ spec:
     # §3-1 소유권 경계: Terraform은 클러스터 "안"의 어떤 것도 소유하지 않는다.
     namespace: podinfo
   syncPolicy:
+    # 🧪 Task 8 실험 2 — automated 만 켠다 (selfHeal 없음). Git 변경은 자동 반영되지만
+    # 클러스터에 생긴 수동 드리프트(kubectl scale 등)는 복구되지 않는다 — 이게 핵심
+    # 교훈이다. automated·selfHeal·prune 은 독립된 3개 스위치다(wiki/drift-and-selfheal.md).
+    automated: {}
     syncOptions:
       - CreateNamespace=true
-    # 🔴 automated를 넣지 않는다 — 수동 sync로 무엇이 언제 일어나는지 먼저 관찰한다
-    # (Task 8의 드리프트 실험 1~3이 "수동 sync 상태에서 시작"을 전제한다).
