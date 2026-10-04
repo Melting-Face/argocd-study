@@ -181,23 +181,85 @@ podman machine(8 CPU / 26 GB, `lakehouse`와 공유)에서 정상 운영 범위�
 기본값은 `resources.requests/limits`를 지정하지 않는다(BestOffort QoS) — Phase 1
 은 학습 환경이라 그대로 뒀다.
 
-**🔴 관측된 이상 징후 — `repo-server`가 반복적으로 재시작한다**(최초 관측
-103분 동안 12회, 이 노트를 마무리하는 5시간여 시점엔 38회로 계속 늘었다 —
-한 번의 일시적 현상이 아니라 **지속되는 패턴**이다). 원인은
-`kubectl describe pod`로 확인한 **liveness probe 타임아웃**이다:
+## `repo-server` 반복 재시작 — 증상, 판정, 원인, 해결 (Fix round 1)
 
-```
+**증상**: `repo-server`만 재시작 횟수가 계속 늘어난다(최초 관측 103분 동안
+12회, 5시간여 뒤 38회 — 한 번의 일시적 현상이 아니라 지속되는 패턴). 나머지
+6개 컴포넌트는 재시작 0회로 그대로였다.
+
+**🔑 판정 — 크래시가 아니라 kubelet 이 죽인 것이다.**
+
+```bash
+$ kubectl describe pod -n argocd <repo-server pod>
 Warning  Unhealthy  Liveness probe failed: Get "http://.../healthz?full=true":
-context deadline exceeded (Client.Timeout exceeded while awaiting headers)
+                     context deadline exceeded (Client.Timeout exceeded while awaiting headers)
+Normal   Killing    Container repo-server failed liveness probe, will be restarted
+
+$ kubectl get pod ... -o jsonpath='{.status.containerStatuses[0].lastState}'
+{"terminated":{"reason":"Completed","exitCode":0, ...}}
 ```
 
-차트 기본 liveness probe 설정은 `timeoutSeconds: 1`로 매우 빡빡하다
-(`kubectl get deploy argo-cd-argocd-repo-server -o jsonpath='{.spec.template.spec.containers[0].livenessProbe}'`).
-`crictl stats`로 본 실제 CPU 사용량은 낮아(진짜 자원 고갈로 보이지 않는다) 공유
-podman VM 의 일시적 스케줄링 지연이 1초 타임아웃을 넘긴 것으로 추정되지만,
-**이 추정은 더 깊이 검증하지 않았다 — 미확인으로 남긴다.** 재시작 후에는 매번
-`1/1 Running`으로 자가 복구됐고 ArgoCD 기능(root Application Sync/Health)에
-관측 가능한 영향은 없었다.
+`exitCode: 0`·`reason: Completed`가 핵심 증거다 — 애플리케이션이 죽은 것이면
+0이 아닌 exit code 나 `Error`/`OOMKilled` 같은 reason 이 남는다. **0 과
+`Completed`는 kubelet 이 liveness probe 실패를 이유로 정상 종료 신호를 보내
+"죽인" 것**이지, repo-server 프로세스 자체가 크래시한 게 아니다. 이 구분이
+진단의 핵심이다.
+
+**원인**: 차트 기본값(`helm show values argo/argo-cd --version 10.9.6` 의
+`repoServer.livenessProbe`/`repoServer.readinessProbe`)이
+`timeoutSeconds: 1`로 매우 빡빡하고, liveness 쪽은
+`httpPath: /healthz?full=true`(가벼운 핑이 아니라 전체 점검)라 더 걸리기
+쉽다. 이 podman VM 은 8 CPU/26 GB 를 `lakehouse` 클러스터와 공유하므로,
+일시적 스케줄링 지연이 1초를 넘기면 3회 연속 실패(기본
+`failureThreshold`) 후 kubelet 이 컨테이너를 재시작한다. `crictl stats`로
+본 실제 CPU 사용량 자체는 낮아(§ 위 표) 지속적인 자원 고갈로는 보이지
+않는다 — "단일 노드 kind + 공유 VM + 1초 타임아웃"의 조합이 원인이라는
+설명이 가장 들어맞는다.
+
+**🔴 "Synced/Healthy 라 기능 영향 없다"로 넘기면 안 되는 이유** — 이 저장소의
+후속 단계가 정확히 이 재시작 주기에 부딪힌다:
+- Step 1(Task 7)의 `argocd app sync`는 repo-server 가 매니페스트를
+  fetch·render 해야 끝난다. 동기화 도중 재시작하면 원인을 알 수 없는 sync
+  실패로 보일 수 있다 — 초보 학습 환경에서 가장 혼란스러운 실패 양상이다.
+- Step 2(Task 8)의 드리프트 실습은 "자동 복구 시점·지연을 실제로 재어
+  적는다"를 요구한다. repo-server 가 몇 분마다 재시작하면 측정한 지연이
+  self-heal 조정 주기인지 repo-server 재시작 대기인지 구분할 수 없어
+  **측정값 자체가 오염된다.**
+
+**해결** — `values/argocd.yaml.tftpl`에 `repoServer.livenessProbe.timeoutSeconds`·
+`repoServer.readinessProbe.timeoutSeconds`를 `5`로 올렸다(기본 `1`). 5라는
+값 자체가 이론적으로 최적이라는 근거는 없다 — "기본값보다 넉넉한 여유를
+준다"는 판단이고, 재시작이 실제로 멈추는지를 관측으로 검증했다.
+`readinessProbe`도 같은 기본값(`timeoutSeconds: 1`)이라 같은 문제를 가질 수
+있어 함께 올렸다(readiness 실패는 컨테이너를 죽이지는 않지만 Service
+엔드포인트에서 빠져 sync 요청이 일시적으로 실패할 수 있다 — 근본 원인이
+같다면 함께 고치는 것이 맞다고 판단했다).
+
+```bash
+$ kubectl get deploy argo-cd-argocd-repo-server -n argocd \
+    -o jsonpath='{.spec.template.spec.containers[0].livenessProbe}{"\n"}{.spec.template.spec.containers[0].readinessProbe}{"\n"}'
+{"failureThreshold":3,"httpGet":{"path":"/healthz?full=true","port":"metrics","scheme":"HTTP"},"initialDelaySeconds":10,"periodSeconds":10,"successThreshold":1,"timeoutSeconds":5}
+{"failureThreshold":3,"httpGet":{"path":"/healthz","port":"metrics","scheme":"HTTP"},"initialDelaySeconds":10,"periodSeconds":10,"successThreshold":1,"timeoutSeconds":5}
+```
+
+**검증 — "적용됐다"가 아니라 "재시작이 멈췄다"가 판정 기준이다.** 재시작
+주기(관측상 약 8분)보다 긴 **16분** 동안 같은 파드를 1분 간격으로 관측했다:
+
+```
+04:39:57  argo-cd-argocd-repo-server-7bf47955cf-m5b2s   1/1   Running   0   31s
+04:40:58  ...                                             1/1   Running   0   92s
+04:41:58  ...                                             1/1   Running   0   2m32s
+...
+04:54:59  ...                                             1/1   Running   0   15m
+=== FINAL (16분 경과) ===
+          ...                                             1/1   Running   0   16m
+```
+
+**같은 파드가 16분 내내 재시작 0회를 유지했다** — 파드 이름이 바뀌지
+않았다는 것(`-7bf47955cf-m5b2s`)과 AGE 가 끊김 없이 계속 증가했다는 것이
+"새 파드라 0부터 시작"이 아니라 "실제로 멈췄다"는 증거다. `argocd app list`도
+적용 전후 모두 `Synced/Healthy`로 변화가 없었다 — 수정이 회귀를 만들지
+않았다.
 
 ## 초기 admin 비밀번호
 
