@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "ask": [
+      "Bash(*git*commit*)",
+      "Bash(*git*push*)",
+      "Bash(*gh*pr*create*)",
+      "Bash(*gh*pr*merge*)",
+      "Bash(*gh*issue*create*)",
+      "Bash(*gh*issue*close*)",
+      "Bash(*gh*release*create*)",
+      "Bash(*gh*repo*edit*)",
+      "Bash(*gh*workflow*run*)",
+      "Bash(*terraform*apply*)",
+      "Bash(*terraform*destroy*)",
+      "Bash(*terraform*state*rm*)",
+      "Bash(*helm*install*)",
+      "Bash(*helm*upgrade*)",
+      "Bash(*helm*uninstall*)",
+      "Bash(*helmfile*apply*)",
+      "Bash(*helmfile*sync*)",
+      "Bash(*helmfile*destroy*)",
+      "Bash(*kubectl*delete*)",
+      "Bash(*kubectl*apply*)",
+      "Bash(*kind*delete*cluster*)"
+    ],
+    "deny": [
+      "Bash(*curl*-X POST*)",
+      "Bash(*curl*-X PUT*)",
+      "Bash(*curl*-X PATCH*)",
+      "Bash(*curl*-X DELETE*)",
+      "Bash(*curl*--data*)",
+      "Bash(*curl*-d *)",
+      "Bash(*wget*--post-data*)",
+      "Bash(*wget*--post-file*)"
+    ]
+  },
+  "hooks": {}
+}

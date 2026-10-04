@@ -18,6 +18,46 @@
       "sourceType": "github",
       "skillPath": "skills/subagent-driven-development/SKILL.md",
       "computedHash": "8dde5589ee083fb4999106d116f01c8fdaf3116a8a9813fdedeb80329de49046"
+    },
+    "kubernetes-specialist": {
+      "source": "local:dagster-study",
+      "sourceType": "local",
+      "skillPath": ".agents/skills/kubernetes-specialist/SKILL.md",
+      "computedHash": "f84cb51c86968d3936194f9afe4cadd83ff08f98407fb93749ece28602c9a10f",
+      "originalSource": "jeffallan/claude-skills",
+      "originalSkillPath": "skills/kubernetes-specialist/SKILL.md"
+    },
+    "terraform-style-guide": {
+      "source": "local:dagster-study",
+      "sourceType": "local",
+      "skillPath": ".agents/skills/terraform-style-guide/SKILL.md",
+      "computedHash": "3a5c2e06a1daa07600d03f48328d1479284e7a9d59d66b2663693ca972080e22",
+      "originalSource": "hashicorp/agent-skills",
+      "originalSkillPath": "plugins/terraform/skills/terraform-style-guide/SKILL.md"
+    },
+    "terraform-test": {
+      "source": "local:dagster-study",
+      "sourceType": "local",
+      "skillPath": ".agents/skills/terraform-test/SKILL.md",
+      "computedHash": "bba613c50727af9a8e47e690b0e16a4093f0239afec495016e016b5152c9a598",
+      "originalSource": "hashicorp/agent-skills",
+      "originalSkillPath": "plugins/terraform/skills/terraform-test/SKILL.md"
+    },
+    "git-commit": {
+      "source": "local:dagster-study",
+      "sourceType": "local",
+      "skillPath": ".agents/skills/git-commit/SKILL.md",
+      "computedHash": "554d1a3c6d95f15bc1170160659ecdc9a9958b64f377f3988941b672c249b13f",
+      "originalSource": "github/awesome-copilot",
+      "originalSkillPath": "skills/git-commit/SKILL.md"
+    },
+    "documentation": {
+      "source": "local:dagster-study",
+      "sourceType": "local",
+      "skillPath": ".agents/skills/documentation/SKILL.md",
+      "computedHash": "1d469418f786a05be83d2a05f04d68788aeed584d13863a650f5ad73c6c4cf50",
+      "originalSource": "anthropics/knowledge-work-plugins",
+      "originalSkillPath": "engineering/skills/documentation/SKILL.md"
     }
   }
 }
