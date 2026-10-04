@@ -1,9 +1,7 @@
-# 정적 품질 게이트 — pre-commit 훅 16개.
+# 정적 품질 게이트 — pre-commit 훅 18개.
 # 규칙의 단일 출처는 여기(그리고 각 훅 전용 설정 파일)이며,
 # .github/workflows/ci.yml 은 이 설정을 그대로 재실행할 뿐 규칙을 중복 정의하지 않는다.
 # 이후 모든 태스크의 커밋은 `pre-commit run --all-files` 를 통과해야 한다.
-#
-# doc-lint · doc-links 는 여기 없다 — scripts/doc_lint.py 가 아직 없어서다(Task 2 에서 추가).
 repos:
   # 범용 위생 훅 — 공백·병합 충돌 표식·대용량 파일·구문 오류를 잡는다.
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -82,10 +80,37 @@ repos:
       - id: terraform_fmt
       - id: terraform_tflint
 
-  # Python 린트 + 포맷 (규칙은 추후 pyproject.toml [tool.ruff], Task 2 에서 .py 와 함께 추가)
-  # Task 1 시점엔 .py 파일이 없어 대상 0개로 스킵된다.
+  # Python 린트 + 포맷 (규칙은 pyproject.toml [tool.ruff], Task 2 에서 scripts/*.py 와 함께 추가)
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.15.20
     hooks:
       - id: ruff-check
       - id: ruff-format
+
+  # 문서 시제 어휘 검사(scripts/doc_lint.py 기본 검사) — dagster-study 이식·변형판.
+  # 원본에서 링크 검사·시제 검사만 남기고 데이터·분석 전용 축은 제거했다
+  # (scripts/doc_lint.py 머리 주석 참고).
+  # 🔴 **검사기 자신을 모집단에 넣는다** — `\.md$`만 두면 doc_lint.py만 고치는
+  #    커밋에서 이 훅이 통째로 Skipped 가 된다(하필 게이트를 바꾸는 커밋에서
+  #    게이트가 안 도는 형태를 막는다).
+  - repo: local
+    hooks:
+      - id: doc-lint
+        name: 문서 시제 어휘 검사
+        language: system
+        entry: python3 scripts/doc_lint.py
+        pass_filenames: false
+        files: '(\.md$|^scripts/doc_lint\.py$)'
+        stages: [pre-commit]
+
+      # 저장소 전역 링크·앵커 + 위키 인덱스(Home.md·_Sidebar.md) 등재 검사.
+      # 🔴 판정이 파일 단위가 아니라 "A 가 B 를 가리키는가" 관계 단위라 pass_filenames
+      #    가 의미가 없고, 모집단이 항상 전체여야 해 always_run 으로 둔다
+      #    (scripts/doc_lint.py 의 check_links·check_wiki_index 머리 주석 참고).
+      - id: doc-links
+        name: 문서 링크·앵커·위키 인덱스 검사
+        language: system
+        entry: python3 scripts/doc_lint.py --links
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]

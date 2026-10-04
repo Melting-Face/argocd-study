@@ -10,5 +10,9 @@ crash.log
 *.kubeconfig
 kubeconfig*
 
+# Python (Task 2 에서 scripts/*.py 와 함께 처음 추가)
+__pycache__/
+*.pyc
+
 # 로컬
 .DS_Store

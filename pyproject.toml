@@ -1,0 +1,24 @@
+# repo 루트 pyproject.toml
+#
+# 역할: Python 린터·포매터(ruff) 설정의 단일 출처.
+# Task 2 에서 scripts/*.py 와 함께 처음 추가한다
+# (.pre-commit-config.yaml 의 ruff 훅 주석이 약속한 자리).
+#
+# 🔴 과한 규칙을 넣지 않는다(YAGNI) — 이 저장소의 Python 은 scripts/ 아래
+#    유틸리티 스크립트 2개(wiki_linkify.py · doc_lint.py)뿐이다. 패키지도
+#    테스트도 없는 시점에 타입체커·엄격한 docstring 규칙까지 들이면 쓰이지
+#    않을 규칙을 미리 만드는 것이 된다. 규모가 커지면 그때 넓힌다.
+[tool.ruff]
+line-length = 88
+# 전역 CLAUDE.md 가 요구하는 Python 들여쓰기(스페이스 4칸)와 같다.
+indent-width = 4
+# .github/workflows/ci.yml 의 actions/setup-python 버전과 맞춘다.
+target-version = "py312"
+
+[tool.ruff.lint]
+# E,F: pyflakes/pycodestyle 핵심 버그·스타일. I: import 정렬.
+# UP: 낡은 문법 자동 승격. B: 흔한 버그 패턴.
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.format]
+indent-style = "space"
