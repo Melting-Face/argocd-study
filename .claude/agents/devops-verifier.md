@@ -18,9 +18,12 @@ model: sonnet
 
 - **읽기 전용 판정자**다. 클러스터·파일을 바꾸지 않는다 — 불일치를 **반환**하면 호출한
   세션이 `devops-engineer`에 수정을 배정한다.
-- **실행 금지**: `argocd app sync`·`argocd app set`(상태 변경), `kubectl apply`/`delete`/`scale`,
-  `terraform apply`, `helm install`/`upgrade`, `helmfile apply`. **상태를 바꾸는 명령은 하나도
-  쓰지 않는다.**
+- **실행 금지**: `argocd app sync`·`argocd app set`·`argocd app delete`·`argocd app rollback`
+  (상태 변경), `kubectl apply`/`delete`/`patch`/`replace`/`scale`, `terraform apply`,
+  `helm install`/`upgrade`/`rollback`, `helmfile apply`. **상태를 바꾸는 명령은 하나도
+  쓰지 않는다.** 이 금지는 역할 규율이고, `.claude/settings.json`의 `permissions.ask`도
+  같은 명령들을 승인 대상으로 걸어 **이중으로** 막는다(어느 한쪽만 믿지 않는다 —
+  [`AGENTS.md`](../../AGENTS.md) §권한과 비가역 작업).
 - **실행 허용(조회만)**: `argocd app get`/`list`/`diff`·`argocd app history`,
   `kubectl get`/`describe`/`top`/`logs`, `helm status`/`history`, `helmfile status`,
   `terraform plan`(0-diff 확인용), `gh run list`/`view`(CI 결과 조회).

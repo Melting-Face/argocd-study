@@ -25,7 +25,14 @@
       "skillPath": ".agents/skills/kubernetes-specialist/SKILL.md",
       "computedHash": "f84cb51c86968d3936194f9afe4cadd83ff08f98407fb93749ece28602c9a10f",
       "originalSource": "jeffallan/claude-skills",
-      "originalSkillPath": "skills/kubernetes-specialist/SKILL.md"
+      "originalSkillPath": "skills/kubernetes-specialist/SKILL.md",
+      "localModifications": [
+        {
+          "path": "references/configuration.md",
+          "reason": "detect-private-key(PEM 머리말 문자열 일치)·gitleaks(generic-api-key, 고엔트로피 placeholder) 훅과 충돌해 예시 비밀값 4곳을 의미 보존 플레이스홀더로 치환. 값은 원본에서도 자리표시자였다 — allowlist로 뚫지 않고 콘텐츠를 고쳤다(Task 3 보고서 §우려 1 참고)",
+          "computedHash": "b82791c48b8f694ab865831291bb5cd6654f6e3eaf2fc092598d465549c4ddfa"
+        }
+      ]
     },
     "terraform-style-guide": {
       "source": "local:dagster-study",
