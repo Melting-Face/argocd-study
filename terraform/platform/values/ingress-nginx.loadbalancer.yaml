@@ -1,0 +1,10 @@
+# ingress-nginx values — substrate 프로파일 "loadbalancer" 전용.
+#
+# ⚠️ 이 파일은 지금 이 저장소에서 쓰이지 않는다(var.ingress_profile 기본값은 "kind").
+# substrate 중립화(spec D6)가 실제로 가능하다는 것을 "코드로" 증명하기 위해 둔다 —
+# 클라우드(LB가 있는) 또는 docker 위의 kind 처럼 LoadBalancer 를 실제로 받을 수 있는
+# substrate 로 바꿔치기할 때는 이 한 파일만 고르면 되고, ingress.tf 나 kind 프로파일 파일은
+# 건드릴 필요가 없다 — 그것이 "계약 4개만 넘긴다"는 §3-2 의 약속이다.
+controller:
+  service:
+    type: LoadBalancer
