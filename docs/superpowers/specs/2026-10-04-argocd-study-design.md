@@ -2,7 +2,8 @@
 
 - 작성일: 2026-10-04
 - 상태: 설계 승인 완료 (구현 계획 미작성)
-- 대상 저장소: `argocd-study`
+- 대상 저장소: [`Melting-Face/argocd-study`](https://github.com/Melting-Face/argocd-study) (**public**)
+- `var.repo_url` = `https://github.com/Melting-Face/argocd-study.git` — D4·D5의 입력값
 
 ---
 
