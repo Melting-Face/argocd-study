@@ -1,0 +1,78 @@
+# podinfo — Step 1 교재(spec D8). Helm/Kustomize 없이 손으로 작성한 plain manifest다.
+# 이미지 태그는 2026-10-05 GitHub Releases 실측 기준 최신 안정판(6.15.0)으로 고정한다
+# (`latest` 금지 — docs/conventions/k8s.md §4). stefanprodan/podinfo는 멀티아키(amd64/arm64)
+# 이미지를 배포하므로 kind-on-podman의 arm64 노드에서도 그대로 동작한다.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: podinfo
+  labels:
+    app.kubernetes.io/name: podinfo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: podinfo
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: podinfo
+    spec:
+      # 업스트림 이미지(alpine 베이스)는 Dockerfile에서 이미 `USER app`(비-root)으로
+      # 빌드된다 — runAsNonRoot는 그 사실을 강제로 재검증하는 역할이다.
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: podinfo
+          image: ghcr.io/stefanprodan/podinfo:6.15.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 9898
+              protocol: TCP
+          # docs/conventions/k8s.md §6 — non-root, 권한 상승 금지, capability 전부 drop.
+          # readOnlyRootFilesystem은 podinfo가 기본 설정(in-memory 캐시, 로컬 파일 비기록)
+          # 에서는 루트 파일시스템에 쓰지 않아 켤 수 있다 — 단, 컨테이너 자체가 쓰는
+          # /tmp만 emptyDir로 별도 마운트해 둔다(상태 저장이 아니라 일시 스크래치 공간).
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          # docs/conventions/k8s.md §2 — requests/limits 필수. podinfo는 가벼운 Go 데모
+          # 앱이라 업스트림 kustomize 예시(requests 100m/64Mi, limits 2000m/512Mi)보다
+          # limits를 좁혀 잡았다 — 이 kind 노드는 podman machine 자원을 다른 프로젝트
+          # (lakehouse) 클러스터와 나눠 쓴다(docs/conventions/k8s.md §2).
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "64Mi"
+            limits:
+              cpu: "500m"
+              memory: "128Mi"
+          # docs/conventions/k8s.md §3 — probe 없이는 ArgoCD가 "떠 있다"와 "준비됐다"를
+          # 구분하지 못한다. timeoutSeconds는 기본값(1s)이 공유 VM에서 너무 빡빡해
+          # 재시작을 유발한 전례(wiki/argocd-bootstrap.md의 repo-server 사례)를 반영해
+          # 여유를 뒀다.
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+      volumes:
+        - name: tmp
+          emptyDir: {}

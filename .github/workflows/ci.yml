@@ -130,3 +130,22 @@ jobs:
             echo "::endgroup::"
           done
           echo "검증한 스택: ${found}개"
+
+      # D4(설계 스펙) — repoURL은 ArgoCD에 전역 변수가 없어 gitops/**에 평문으로
+      # 중복된다. 이 스텝이 그 불일치를 잡는 유일한 자동 게이트다. 원칙 1: 파일만
+      # 읽는다 — kubectl·helm·terraform·argocd 같은 인프라 명령을 쓰지 않는다.
+      - name: repoURL 일관성 검사 (gitops/**)
+        run: |
+          set -euo pipefail
+          urls=$(grep -rhoE '^[[:space:]]*repoURL:[[:space:]]*\S+' gitops \
+            --include='*.yaml' --include='*.yml' | awk '{print $NF}' | sort -u)
+          count=$(printf '%s\n' "${urls}" | grep -c . || true)
+          if [ "${count}" -eq 0 ]; then
+            echo "::warning::gitops/** 에서 repoURL 을 찾지 못했다"
+          elif [ "${count}" -gt 1 ]; then
+            echo "::error::gitops/** 의 repoURL 이 서로 다르다"
+            printf '%s\n' "${urls}"
+            exit 1
+          else
+            echo "repoURL 일치 확인: ${urls}"
+          fi

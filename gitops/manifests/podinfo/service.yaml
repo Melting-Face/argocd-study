@@ -1,0 +1,16 @@
+# podinfo 노출용 ClusterIP Service — Ingress(ingress-nginx)가 이 Service를 백엔드로 쓴다.
+apiVersion: v1
+kind: Service
+metadata:
+  name: podinfo
+  labels:
+    app.kubernetes.io/name: podinfo
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: podinfo
+  ports:
+    - name: http
+      port: 9898
+      targetPort: http
+      protocol: TCP
