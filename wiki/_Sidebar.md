@@ -2,6 +2,19 @@
 
 [홈](Home.md)
 
+**ArgoCD 축**
+
+(노트 없음 — 추가되면 여기에 올린다)
+
+**Terraform · Helm · Helmfile 축**
+
+- [terraform-on-kind](terraform-on-kind.md)
+- [terraform-stack-boundaries](terraform-stack-boundaries.md)
+
+**교차 축**
+
+(노트 없음 — 추가되면 여기에 올린다)
+
 **정본은 저장소에**
 
 - [README](https://github.com/Melting-Face/argocd-study#readme)

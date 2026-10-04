@@ -16,17 +16,18 @@ ArgoCD·Terraform·Helm·Helmfile 네 도구를 한 저장소에서 다루는
 
 ## 지금 상태
 
-위키 파이프라인만 세운 시점이라 노트는 아직 없다. 노트는 이후 과제가 진행되며
-채워진다. 최종적으로 9개 노트가 더 생기고, 세 구간으로 묶인다.
+스택 A(kind 클러스터)를 세우며 첫 노트 2장이 생겼다. 둘 다 **Terraform·Helm·
+Helmfile 축**에 속한다. 나머지 구간은 이후 과제가 진행되며 채워진다.
 
 - **ArgoCD 축** — 부트스트랩 → 첫 애플리케이션 → 드리프트와 self-heal →
   소스 타입(Helm/Helmfile/plain manifest) → Airflow 배포
-- **Terraform·Helm·Helmfile 축** — kind 위의 Terraform, 스택 경계와 폭발반경,
-  Helm 차트 작성, Helmfile과 Terraform의 비교
+- **Terraform·Helm·Helmfile 축** — [kind 위의 Terraform](terraform-on-kind.md),
+  [스택 경계와 폭발반경](terraform-stack-boundaries.md), Helm 차트 작성,
+  Helmfile과 Terraform의 비교
 - **교차 축** — 네 도구의 소유권 경계가 어디서 겹치고 갈리는지
 
 노트가 생기면 이 페이지와 [`_Sidebar`](_Sidebar.md)가 함께 갱신된다 —
-`doc-links` 훅이 아직 없는 노트를 사이드바에 올리는 것을 막는다.
+`doc-links` 훅이 등재되지 않은 노트를 통과시키지 않는다.
 
 ## 이 프로젝트가 궁금하다면
 
