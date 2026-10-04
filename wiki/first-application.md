@@ -129,6 +129,17 @@ networking.k8s.io  Ingress     podinfo    podinfo  OutOfSync  Missing
 `syncPolicy`에 `automated`가 없어 **자기 하위 리소스(Service·Deployment·
 Ingress)는 만들지 않고 멈췄다** — `OutOfSync` + `Missing` 조합을 그대로 봤다.
 
+🔑 **정확히 하자면 이 사이에 조회성 개입이 하나 끼었다.** push 직후
+`argocd app get podinfo`를 바로 돌리면 `PermissionDenied`가 났다 — root가
+아직 새 커밋을 못 읽어 `podinfo` Application 자체가 클러스터에 없었기
+때문으로 보인다(ArgoCD가 "존재하지 않는 앱"과 "권한 없음"을 같은 에러로
+묶는지는 **미확인**이다). `argocd app get root --hard-refresh`로 root를
+강제로 다시 읽게 하자 `podinfo`가 나타났다. 이 명령은 상태를 바꾸지
+않는 조회(강제 재평가)일 뿐이지만, root는 `automated`라 **몇 분 안에
+어차피 스스로 같은 일을 했을 것**이다 — "커밋만으로 앱이 생겼다"는 결론
+자체는 그대로이되, 관찰을 서두르려고 수동으로 한 번 찔러본 사실은
+남겨 둔다.
+
 ### Step 4 — 수동 sync
 
 ```bash
@@ -163,12 +174,27 @@ Warning  Failed  kubelet  Error: container has runAsNonRoot and image has
 
 업스트림 이미지는 Dockerfile에서 `USER app`(숫자가 아닌 이름)으로 빌드돼,
 `securityContext.runAsNonRoot: true`만 두면 kubelet이 "진짜 non-root인지"를
-스스로 확인하지 못해 컨테이너 생성 자체를 거부한다. `podman run --rm
---entrypoint id ghcr.io/stefanprodan/podinfo:6.15.0` → `uid=100(app)
-gid=101(app)`로 실제 UID/GID를 확인해 `runAsUser: 100`·`runAsGroup: 101`을
-명시하는 커밋을 하나 더 올려 해결했다. `syncPolicy`가 수동이라 이 두 번째
-커밋도 `argocd app sync podinfo`를 다시 눌러야 반영됐다 — 수동 sync를
-택한 대가(자동 반영 없음)를 여기서도 체감했다.
+스스로 확인하지 못해 컨테이너 생성 자체를 거부한다. 실제 UID/GID를
+`podman run`으로 직접 확인했다:
+
+```bash
+$ podman run --rm --entrypoint id ghcr.io/stefanprodan/podinfo:6.15.0
+uid=100(app) gid=101(app) groups=101(app)
+```
+
+이 값을 `runAsUser: 100`·`runAsGroup: 101`로 명시하는 커밋을 하나 더 올려
+해결했다. `syncPolicy`가 수동이라 이 두 번째 커밋도 `argocd app sync
+podinfo`를 다시 눌러야 반영됐다 — 수동 sync를 택한 대가(자동 반영 없음)를
+여기서도 체감했다.
+
+🔴 **이 값은 하드코딩이지 일반 해법이 아니다.** `100`/`101`은 podinfo
+`6.15.0` 이미지의 Dockerfile(`adduser -S -G app app`)이 만든 UID/GID를
+그대로 읽은 것이고, 업스트림이 다음 릴리스에서 사용자 생성 순서를 바꾸거나
+베이스 이미지를 교체하면 이 값도 조용히 틀어질 수 있다(과거 릴리스에서
+이 값이 안정적이었는지는 **미확인**이다). 태그를 `6.15.0`으로 고정해 뒀으므로
+지금 이 매니페스트 범위에서는 안전하지만, 태그를 올릴 때는 이 UID/GID를
+다시 확인해야 한다 — Renovate 같은 자동 업데이트 도구를 붙인다면 이
+검증 스텝 없이는 위험하다.
 
 ### 최종 확인
 
