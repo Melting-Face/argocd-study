@@ -88,11 +88,17 @@
 ```bash
 printf 'a:\n  b: 1\n   c: 2\n' > /tmp/bad.yaml && cp /tmp/bad.yaml ./bad.yaml
 pre-commit run yamllint --files bad.yaml    # 기대: FAIL
-printf 'AWS_SECRET_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE\n' > leak.env
+# 🔴 탐지되는 키를 이 문서에 literal 로 적지 않는다 — 적는 순간 이 파일 자체가 게이트에 걸린다.
+#    AWS 액세스 키 형태(접두사 AKIA + 대문자/숫자 16자)를 그 자리에서 조립해 쓴다.
+KEY="AKIA$(printf 'ABCDEFGHIJKLMNOP')"
+printf 'AWS_SECRET_ACCESS_KEY=%s\n' "$KEY" > leak.env
 pre-commit run gitleaks --all-files          # 기대: FAIL
 rm -f bad.yaml leak.env
 ```
 🔴 **게이트가 통과하는 것을 작동 증거로 읽지 않는다.** 깨뜨렸을 때 **잡는 것**이 증거다.
+
+⚠️ 교과서 예시 키 `AKIAIOSFODNN7EXAMPLE` 을 쓰지 않는다 — gitleaks v8.30.0 기본 설정의
+`.+EXAMPLE$` allowlist 에 걸려 **탐지되지 않는다**(2026-10-04 실측). 접미사 없는 동형 값을 쓴다.
 
 - [ ] **Step 4: 전체 통과 확인**
 
