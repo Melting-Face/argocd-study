@@ -20,8 +20,19 @@ spec:
     spec:
       # 업스트림 이미지(alpine 베이스)는 Dockerfile에서 이미 `USER app`(비-root)으로
       # 빌드된다 — runAsNonRoot는 그 사실을 강제로 재검증하는 역할이다.
+      #
+      # 🔴 실측(2026-10-05) — runAsNonRoot: true만 두고 runAsUser를 비우면 배포가
+      # CreateContainerConfigError로 깨진다:
+      #   Error: container has runAsNonRoot and image has non-numeric user (app),
+      #   cannot verify user is non-root
+      # kubelet은 이미지의 USER 지시어가 이름(app)이면 UID를 몰라 "non-root임"을
+      # 스스로 확인하지 못한다 — runAsUser를 숫자로 명시해야 통과한다.
+      # `podman run --rm --entrypoint id ghcr.io/stefanprodan/podinfo:6.15.0`로
+      # 실측한 값(uid=100(app) gid=101(app))을 그대로 못박았다.
       securityContext:
         runAsNonRoot: true
+        runAsUser: 100
+        runAsGroup: 101
       containers:
         - name: podinfo
           image: ghcr.io/stefanprodan/podinfo:6.15.0
