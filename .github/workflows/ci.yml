@@ -1,8 +1,20 @@
 name: ci
 
-# 서버측 정적 품질 게이트.
-# 로컬 pre-commit 은 "실수 방지"다 — `git commit --no-verify` 나 훅 미설치 클론이면
-# 전부 우회된다. 이 워크플로가 "봉쇄"다(우회 불가).
+# 층 2(서버 정적) 품질 게이트. 층 1(pre-commit)·층 2 비교표와 "봉쇄가 아니다" 판단의
+# 전체 근거는 docs/superpowers/specs/2026-10-04-argocd-study-design.md §9 를 정본으로
+# 본다 — 여기서는 같은 사실을 중복 서술하지 않고 요지만 남긴다.
+#
+# 🔴 정정 (2026-10-04 실측) — 이 워크플로는 "봉쇄(우회 불가)"가 아니다.
+#    `gh api repos/Melting-Face/argocd-study/branches/main/protection` → `Branch not protected`(404).
+#    `main` 에 branch protection 도 required status check 도 없고, 우리는 PR 없이 직접
+#    push 한다. 그래서 이 CI 는 **커밋이 이미 공개된 뒤에** 도는 사후 신호다 — 빨간 X 가
+#    떠도 공개 자체를 막지 못한다. 층 1 과의 실제 차이는 "우회 가능 여부"가 아니라 둘뿐이다:
+#    ① 층 1 은 커밋 **전**, 이 층은 push **후**에 돈다.
+#    ② **훅을 안 깐 클론에서도 이 층은 돈다** — 이것이 층 2 의 유일한 실효다.
+#    봉쇄로 올리려면 PR 흐름 + required status check 가 필요하지만 **지금은 하지 않는다**
+#    — GitOps 가 `main` 에 직접 커밋하는 흐름을 전제하기 때문이다(Step 1·2 가 그 위에 선다,
+#    spec §9). 아래 "한계"(commit-msg) 서술과 같은 축의 이야기다 — 기계 강제가 없는 규칙을
+#    "막혀 있다"로 쓰지 않는다.
 #
 # 설계원칙 4개 (docs/superpowers/specs/2026-10-04-argocd-study-design.md §7-6 계승):
 #   1. 🔴 인프라에 붙는 명령을 넣지 않는다. 게이트가 클러스터 가용성에 묶이면 커밋이 막힌다.
@@ -23,13 +35,12 @@ name: ci
 # ".tf 파일 존재" 가드 뒤에 둔다. Task 4 에서 terraform/ 스택이 생기면 가드가 자연히 열린다.
 #
 # 🔴 한계 — 이 워크플로는 커밋 "메시지"(Conventional Commits, .gitlint 규칙)를 검사하지
-#    않는다. 의도적으로 뺐다: 브랜치는 main 이고 여기엔 **직접 push**하므로(PR 리뷰 단계가
-#    없다), commit-msg 검사는 커밋이 **이미 공개된 뒤**에야 CI 잡으로 뜬다 — 그 시점의 빨간
-#    X는 공개 이력을 다시 쓰지 않는 한 아무도 조치할 수 없는, 기계 강제가 아닌 신호다.
-#    gitlint 는 로컬 commit-msg 훅으로만 작동한다(.pre-commit-config.yaml 의 gitlint 항목
-#    주석 참고) — `pre-commit install --hook-type commit-msg` 를 깐 사람에게만 적용되고,
-#    `git commit --no-verify` 로 우회 가능하다. **기계 강제가 없는 규칙을 "막혀 있다"로
-#    쓰지 않는다** — 그래서 가짜 CI 게이트를 세우는 대신 이 한계를 여기 적어 둔다.
+#    않는다. 의도적으로 뺐다 — 위 "정정" 문단과 같은 축이다: main 직접 push라 commit-msg
+#    검사를 CI 잡으로 추가해도 똑같이 사후 신호일 뿐이고, 심지어 더 나쁘다(커밋 자체가 아니라
+#    "검사했다는 사실"조차 공개 후에야 안다). gitlint 는 로컬 commit-msg 훅으로만 작동한다
+#    (.pre-commit-config.yaml 의 gitlint 항목 주석 참고) — `pre-commit install
+#    --hook-type commit-msg` 를 깐 사람에게만 적용되고 `git commit --no-verify` 로 우회
+#    가능하다. 가짜 CI 게이트를 세우는 대신 이 한계를 여기 적어 둔다.
 
 on:
   pull_request:

@@ -1,7 +1,7 @@
 # gitlint 설정 (Conventional Commits).
 # gitlint 는 저장소 루트(CWD)에서 .gitlint / pyproject.toml 을 탐지한다.
 [general]
-# Conventional Commits 제목 규칙 강제: `type(scope): 설명` (표준 type 11종이 기본 적용)
+# Conventional Commits 제목 규칙 강제: `type(scope): 설명`
 contrib=contrib-title-conventional-commits
 # 짧은 커밋엔 본문이 없을 수 있어 허용한다.
 ignore=body-is-missing
@@ -12,3 +12,11 @@ fail-without-commits=true
 
 [title-max-length]
 line-length=72
+
+# 🔴 허용 type 목록을 우리가 직접 소유한다 — gitlint-core v0.19.1 소스
+# (gitlint/contrib/rules/conventional_commit.py)를 실측 확인한 결과 기본값이
+# [fix, feat, chore, docs, style, refactor, perf, test, revert, ci, build] 11종으로
+# 전역 CLAUDE.md 의 11종과 우연히 같았지만, 외부 플러그인 기본값에 묵시적으로 기대면
+# 업스트림이 바꿀 때 이 저장소 모르게 조용히 달라진다. 그래서 같은 11종을 여기 명시한다.
+[contrib-title-conventional-commits]
+types=feat,fix,docs,style,refactor,perf,test,build,ci,chore,revert
