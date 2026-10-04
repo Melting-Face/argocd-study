@@ -5,6 +5,7 @@
 **ArgoCD 축**
 
 - [argocd-bootstrap](argocd-bootstrap.md)
+- [first-application](first-application.md)
 
 **Terraform · Helm · Helmfile 축**
 
