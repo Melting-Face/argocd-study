@@ -113,7 +113,14 @@ def collect(targets: list[str], repo_root: Path) -> list[Path]:
 
 
 def check_links(repo_root: Path) -> list[str]:
-    """저장소 전역의 상대 링크와 앵커가 실재하는지 본다."""
+    """저장소 전역의 상대 링크와 앵커가 실재하는지 본다.
+
+    ⚠️ **다루지 않는 것** — 인라인 마크다운 링크(`[텍스트](경로)`)만 본다.
+    참조형 링크(`[x]: url`)와 HTML `<a href>`는 인식하지 못한다. 위키 원본
+    규약이 애초에 이 두 형태를 쓰지 않기로 했으므로(`scripts/wiki_linkify.py`
+    머리 주석과 같은 전제) 비대칭 구멍은 아니지만, **그 규약 자체를 어겨도
+    이 검사는 못 잡는다** — 빠뜨린 것이 아니라 관측 범위 밖임을 명시해 둔다.
+    """
     targets: list[Path] = [repo_root / f for f in LINK_SCAN_FILES]
     for d in LINK_SCAN_DIRS:
         targets.extend(sorted((repo_root / d).rglob("*.md")))
@@ -155,6 +162,34 @@ def check_links(repo_root: Path) -> list[str]:
                     f"{rel}: dead-anchor {path_part}#{anchor} — 그런 절이 없다"
                 )
     return findings
+
+
+def check_wiki_flat(wiki_dir: Path) -> list[str]:
+    """`wiki/` 하위에 **디렉터리로 묻힌** `.md` 파일이 있는지 본다.
+
+    위키 규약은 평평 구조를 요구한다(위키에 계층 사이드바가 없다). 그런데
+    그 규약은 지금까지 문서에만 적혀 있었고 기계가 재지 않았다 — 그래서
+    누군가 `wiki/sub/note.md`를 만들어도 **아무것도 못 잡는다**:
+    `check_wiki_index`의 `glob("*.md")`는 평면 글롭이라 애초에 그 파일을
+    모집단에 넣지 않고(= "unindexed"조차 못 뜬다), `.github/workflows/wiki.yml`의
+    `cp wiki/*.md`도 비재귀라 조용히 복사하지 않는다. pre-commit·CI·미러
+    워크플로가 **전부 초록불**인 채로 그 노트는 영원히 위키에 배달되지
+    않는다 — 증상이 없는 침묵 실패다.
+
+    이 검사가 그 사각을 메운다. `wiki_dir.rglob("*.md")`로 **재귀**해
+    `wiki_dir` 바로 아래가 아닌 파일을 모두 위반으로 잡는다 — `check_wiki_index`
+    가 평면 글롭을 쓰는 것과 **의도적으로 반대**다(한쪽은 "평평함을 전제하고
+    그 전제 안에서 본다", 이쪽은 "그 전제 자체가 깨졌는지를 본다").
+    """
+    if not wiki_dir.is_dir():
+        return []
+    return [
+        f"wiki/{f.relative_to(wiki_dir)}: nested-file — wiki/ 는 평평해야 한다"
+        " (위키에 계층 사이드바가 없고, 미러의 cp wiki/*.md 는 비재귀라"
+        " 하위 디렉터리 파일은 배달되지 않는다)"
+        for f in sorted(wiki_dir.rglob("*.md"))
+        if f.parent != wiki_dir
+    ]
 
 
 def check_wiki_index(wiki_dir: Path) -> tuple[list[str], int] | None:
@@ -294,7 +329,16 @@ def main() -> int:
                 f"위키 인덱스 미등재 {len(index_findings)}건 / 노트 {note_count}개",
                 file=sys.stderr,
             )
-        return 1 if link_findings or index_findings else 0
+
+        # 위키 평평 구조 강제 — check_wiki_flat 머리 주석 참고. check_wiki_index
+        # 와 같은 자리(--links)에서 돈다 — 둘 다 "wiki/ 구조가 규약과 맞는가"
+        # 축이고, 모집단이 항상 wiki/ 전체여야 하는 것도 같다(always_run 훅).
+        flat_findings = check_wiki_flat(repo_root / "wiki")
+        for finding in flat_findings:
+            print(finding)
+        print(f"위키 평평 구조 위반 {len(flat_findings)}건", file=sys.stderr)
+
+        return 1 if link_findings or index_findings or flat_findings else 0
 
     # 기본 검사(플래그 없음) — 시제 어휘. 경로 생략 시 DEFAULT_TARGETS 전체를 본다.
     files = collect(list(args.paths) or list(DEFAULT_TARGETS), repo_root)

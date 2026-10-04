@@ -78,6 +78,10 @@ jobs:
           # 위키가 소유한 것은 페이지뿐이다. .git 외 기존 파일을 지우고 통째로 다시 깐다
           # (멱등성 — 저장소에서 지운 페이지가 위키에 남지 않는다).
           find wiki-remote -mindepth 1 -maxdepth 1 -not -name '.git' -exec rm -rf {} +
+          # 🔴 의도적으로 비재귀다 — wiki/ 는 평평해야 한다(하위 디렉터리 금지).
+          #    그 평평 구조를 "강제"하는 것은 여기가 아니라 scripts/doc_lint.py
+          #    --links 의 check_wiki_flat 다(커밋 시점 게이트). 여기서 재귀로
+          #    바꾸면 게이트가 막는 배치를 미러가 먼저 받아주는 꼴이 된다.
           cp wiki/*.md wiki-remote/
           python3 scripts/wiki_linkify.py wiki-remote
 
