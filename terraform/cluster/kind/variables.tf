@@ -21,6 +21,15 @@ variable "http_host_port" {
   description = <<-EOT
     호스트에서 Ingress 80 포트로 매핑할 포트. 기본 8081.
     8080/8443 은 기존 lakehouse kind 클러스터가 점유하므로 이 스택에서는 금지한다.
+
+    🔴 terraform/platform/variables.tf 의 같은 이름 변수와 값이 일치해야 한다
+    (terraform_remote_state 를 쓰지 않는 대가로 양쪽에 중복 선언, spec D1). 어긋나면
+    platform 스택(Task 6)의 argocd_url output 이 조용히 틀린 포트로 URL 을 조립하고,
+    사용자는 connection refused 만 보고 원인이 두 스택의 변수 불일치라는 걸 알기
+    어렵다. 그리고 이 변수는 extra_port_mappings(main.tf)의 실제 호스트 포트를
+    정한다 — kind 노드는 컨테이너라 공개 포트를 클러스터 **생성 시점에만** 정할 수
+    있으므로, 이 값을 바로잡으려면 변수만 고치는 게 아니라 **클러스터 재생성**이
+    필요하다(docs/conventions/k8s.md §8).
   EOT
   type        = number
   default     = 8081

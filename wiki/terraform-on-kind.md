@@ -139,6 +139,85 @@ PATH`). 교훈: **"대상 0개라 Skipped"는 "그 검사가 통과했다"가 �
 작동해야 한다는 기준으로 골랐다(`ci.yml`에 설치 스텝을 추가하는 대안은 CI만
 고치고 로컬 클론은 여전히 깨진 채로 둔다).
 
+## `hostPort` 컨트롤러 + 기본 `RollingUpdate` = 단일 노드에서 영구 교착
+
+`terraform/platform`의 `helm_release.ingress_nginx`(values: `ingress-nginx.kind.yaml`)
+values 파일을 고치고 재적용할 때마다 걸릴 수 있는 교착이다(Fix round 1, 2026-10-04 실측).
+
+### 증상
+
+`terraform apply`가 끝나지 않는다. 파드를 보면 2개가 떠 있다 — 하나는 `Running`(구버전),
+하나는 `Pending`(신버전).
+
+```
+$ kubectl get pods -n ingress-nginx
+NAME                                        READY   STATUS    RESTARTS   AGE
+ingress-nginx-controller-6cb658499d-zwh7k   1/1     Running   0          37m
+ingress-nginx-controller-8547555f4b-qp7kj   0/1     Pending   0          15m
+```
+
+### 판정 명령
+
+```
+$ kubectl describe pod -n ingress-nginx ingress-nginx-controller-8547555f4b-qp7kj
+...
+Warning  FailedScheduling  ...  0/1 nodes are available:
+                                1 node(s) didn't have free ports for the requested pod ports.
+```
+
+### 원인
+
+ingress-nginx 차트 기본 `updateStrategy`는 `RollingUpdate`(`maxSurge: 25%`,
+`maxUnavailable: 25%`)다. `replicas: 1`에서 퍼센트가 반올림되면 `maxSurge`는 **1로
+올림**, `maxUnavailable`은 **0으로 내림**된다 — 즉 "구버전을 하나도 안 죽이고 신버전을
+먼저 띄우려" 한다.
+
+그런데 `controller.hostPort.enabled: true`는 노드의 80/443 포트를 **배타적으로**
+점유한다. 이 클러스터는 단일 노드(kind)라, 신버전 파드는 구버전이 쥔 포트를 못 잡아
+`Pending`에 갇힌다. 구버전은 신버전이 `Ready`가 돼야 죽는 규칙(`RollingUpdate`)이라
+죽지 않는다. **서로가 서로를 기다리며 영원히 멈춘다.**
+
+`helm_release`의 `wait = true`(R4 대비로 켜둔 그 설정)가 이 교착과 정면으로 부딪힌다
+— `helm upgrade --wait`가 수렴할 조건이 영영 안 와서 `terraform apply`가 타임아웃까지
+매달린다.
+
+### 해결
+
+`controller.updateStrategy.type: Recreate`를 쓴다. 구버전을 전부 내린 뒤에 신버전을
+띄우므로 포트 경합 자체가 생기지 않는다 — 대신 짧은 다운타임이 생긴다. 단일 레플리카
+`hostPort` 컨트롤러에서는 이 교환이 맞다(교착은 다운타임보다 나쁘다).
+
+```yaml
+controller:
+  updateStrategy:
+    type: Recreate
+```
+
+키 경로는 `helm show values ingress-nginx/ingress-nginx --version <고정버전>`으로
+실측하고 썼다 — Helm은 모르는 키를 에러 없이 버리므로, 경로를 추측해서 넣으면 "넣은
+줄 알았는데 안 들어간" 상태로 같은 교착을 또 만난다.
+
+### 교착에 걸렸다면 복구 절차 (이 세션에서 실제로 밟은 순서)
+
+1. 매달린 `terraform apply`를 중단한다(SIGTERM). Helm 릴리스가 `pending-upgrade`
+   상태로 멈춘다 — 이 상태에서 `terraform apply`를 다시 돌리면
+   `Error: Upgrade failed: another operation (install/upgrade/rollback) is in
+   progress`로 즉시 실패한다(이것도 실측).
+2. `helm rollback <release> <이전 revision> -n <namespace>`로 되돌린다. 이 세션에서는
+   `Error: release ... failed: resource Deployment/... not ready. status: Failed,
+   message: Progress deadline exceeded`라는 에러 메시지가 났지만, 실제로는 롤백이
+   진행돼 `Deployment`가 정상(`Available=True`)으로 돌아와 있었다 — **에러 메시지와
+   실제 클러스터 상태가 다를 수 있으니, 에러를 보고 끝내지 말고 `kubectl get pods`·
+   `helm status`로 실제 상태를 다시 확인한다.**
+3. `helm status <release> -n <namespace>`가 `deployed`가 아니라 `failed`로 남아도,
+   그 자체가 다음 `helm upgrade`를 막지는 않는다(`pending-*` 상태만 막는다). 바로
+   `terraform apply`를 재시도하면 된다.
+4. `updateStrategy: Recreate`가 반영된 values로 재적용하면 교착 없이 수렴한다
+   (이 세션 실측: 31초).
+5. 이 저장소는 로컬 backend라 `terraform force-unlock`은 필요하지 않았다(state lock
+   파일이 프로세스 종료와 함께 풀렸다) — 원격 backend였다면 별도 unlock이 필요했을
+   수 있다.
+
 ## 참고
 
 - `tehcyx/terraform-provider-kind`: `github.com/tehcyx/terraform-provider-kind`

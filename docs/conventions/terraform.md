@@ -28,12 +28,23 @@
 
 ## 2. 버전 고정 (latest 금지)
 
-- `required_version`과 프로바이더 버전을 `~>`로 핀한다.
+- **프로바이더 버전은 `~>` 범위가 아니라 정확한 버전으로 핀한다**(Global Constraints).
+  같은 커밋을 체크아웃하면 같은 프로바이더 버전이 받아져야 재현성이 성립하는데, `~>`는
+  패치(또는 마이너) 범위를 열어 둬 "언제 `terraform init`을 실행했는가"에 따라 다른
+  버전이 설치될 수 있다. 실제 코드(`terraform/platform/versions.tf`)는 `helm = "3.0.2"`·
+  `kubernetes = "2.38.0"`, `terraform/cluster/kind/versions.tf`는 `kind = "0.11.0"`·
+  `external = "2.4.2"`로 전부 정확히 고정돼 있다.
+  - 🔑 **예외는 `required_version`뿐이다**: `required_version = ">= 1.5.0"`처럼 하한만
+    둔다. 이건 Terraform CLI 자체의 버전이라 "이 설정을 처리할 수 있는 최소 기능
+    집합"만 보장하면 되고, 실행 환경(로컬 CLI·CI 러너)마다 실제 설치된 버전이 다른
+    것을 전제하기 때문이다 — 프로바이더처럼 "정확히 그 버전의 바이너리를 내려받아
+    고정"하는 대상이 아니다.
 - **`.terraform.lock.hcl`은 커밋 대상**이다(프로바이더 해시 고정 → 재현성). state·tfvars와
   달리 추적 대상이다.
 - **`tehcyx/kind`는 커뮤니티 프로바이더**다(R11) — 버전을 더 좁게 핀하고, 끊기면 substrate
   계약 덕에 `k3d`/`existing` 구현으로 교체한다(설계 D6).
-- `hashicorp/helm`은 `~> 3.0`으로 핀한다(argo-cd 차트 10.9.6 / ArgoCD v3.5.3 기준 확인).
+- `hashicorp/helm`은 `3.0.2`로 핀한다(argo-cd 차트 10.9.6 / ArgoCD v3.5.3 기준 확인이
+  3.0 라인을 전제로 했으므로, 3.x 최신(3.3.0대)이 아니라 3.0 라인의 최신 패치를 쓴다).
 
 ### 2-1. `config_context`는 반드시 고정한다
 

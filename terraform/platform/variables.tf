@@ -93,6 +93,16 @@ variable "http_host_port" {
     실제 호스트 포트)와 값이 일치해야 한다 — 이 스택은 그 포트로 트래픽을 보내지 않지만
     (포트 매핑 자체는 cluster 스택 소관), Task 6 의 argocd_url output 이 이 값으로 URL 을
     조립한다. terraform_remote_state 를 쓰지 않는 대가로 양쪽에 중복 선언한다.
+
+    🔴 어긋나면 무슨 일이 나는가: cluster 스택이 실제로 연 호스트 포트(예: 8081)와
+    이 값(예: 기본값을 바꾸지 않아 생긴 8082 같은 불일치)이 다르면, Task 6 의
+    argocd_url output 은 "조용히 틀린 포트"로 URL 을 조립한다. 사용자는
+    `connection refused`만 보고, 원인이 "두 스택의 변수 불일치"라는 걸 URL 문자열만
+    봐서는 알 수 없다. 게다가 kind 의 extra_port_mappings 는 클러스터 **생성 시점**에만
+    정할 수 있어, cluster 쪽 값을 바로잡으려면 이 변수만 고치는 게 아니라
+    **클러스터 재생성**이 필요하다(docs/conventions/k8s.md §8). 이 변수를 바꿀 때는
+    반드시 terraform/cluster/kind/variables.tf 의 http_host_port 와 같은 값인지
+    먼저 확인한다.
   EOT
   type        = number
   default     = 8081
