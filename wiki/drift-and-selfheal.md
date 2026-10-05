@@ -136,6 +136,12 @@ $ kubectl get pod -n argocd argo-cd-argocd-repo-server-... \
 전(00:00:21Z)이었다 — **이 6초 측정 구간에는 재시작이 끼지 않았다.**
 깨끗한 측정이다.
 
+Task 7에서는 `argocd app get`/`app sync`가 2분 타임아웃을 낸 적이
+있다고 보고됐다(원인 미규명). 이 실험의 "6초" 측정은 `argocd` CLI를
+전혀 쓰지 않고 `kubectl get events`/`kubectl get deploy -o jsonpath`만
+썼으므로 **그 경로로는 오염되지 않는다** — 다만 이것이 다른 경로의
+오염 가능성까지 배제한다는 뜻은 아니다.
+
 ## 실험 4 — `prune`: 고아 리소스와 그 해소
 
 ### `prune: false`에서 매니페스트 삭제
