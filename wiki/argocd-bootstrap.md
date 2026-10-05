@@ -424,3 +424,82 @@ No changes. Your infrastructure matches the configuration.
 
 **port-forward 없이 UI 가 뜨는 것**(`curl` 200)이 spec 성공 기준 1번이고,
 실측으로 충족했다.
+
+## Task 8 Step 7 — 전체 파괴와 복원 (2026-10-05, spec 성공 기준 5번)
+
+Task 8 착수 전, 호스트 와이파이 단절로 root Application 이
+`Unknown/ComparisonError` 에 갇혔던 사고가 있었다(자세한 경위와 에러
+메시지는 [`drift-and-selfheal.md`](drift-and-selfheal.md) "참고" 절
+4번 항목). 네트워크가 복구된 뒤, 이 사고와 별개로 spec 성공 기준 5번
+(전체 파괴 → `apply` 2회로 복원)을 검증했다.
+
+사전 점검(호스트 ping/DNS, `git status`/`git log origin/main..HEAD`
+모두 깨끗, 클러스터 내부 `nslookup github.com` 성공)을 모두 통과한
+뒤 진행했다. `terraform/cluster/kind plan -destroy` 로 파괴 대상이
+`kind_cluster.this`(`argocd-study`) 하나뿐임을 먼저 확인했다 —
+기존 `lakehouse` 클러스터는 대상에 없었다. state 파일은
+`terraform/cluster/kind/terraform.tfstate`, `terraform/platform/terraform.tfstate`
+를 타임스탬프를 붙여 `.tfstate-backups/`(`.gitignore` 대상, 로컬
+보관)에 복사해 두었다.
+
+```bash
+$ terraform -chdir=terraform/platform destroy -auto-approve
+Destroy complete! Resources: 3 destroyed.          # 15:49:47 → 15:49:50 (약 3초)
+
+$ terraform -chdir=terraform/cluster/kind destroy -auto-approve
+kind_cluster.this: Destruction complete after 11s   # 15:50:17 → 15:50:29 (약 12초)
+
+$ terraform -chdir=terraform/cluster/kind apply -auto-approve
+kind_cluster.this: Creation complete after 26s      # 15:50:52 → 15:51:19 (약 27초)
+
+$ terraform -chdir=terraform/platform apply -auto-approve
+helm_release.ingress_nginx: Creation complete after 1m8s
+helm_release.argo_cd: Creation complete after 1m34s
+helm_release.root_app: Creation complete after 0s
+Apply complete! Resources: 3 added, 0 changed, 0 destroyed.  # 15:51:41 → 15:54:26 (약 2분45초)
+```
+
+`platform apply` 완료 직후 `podinfo` Application 은 `Synced/Progressing`
+이었고, **11초 뒤** `Synced/Healthy` 로 전환됐다(10초 간격 폴링으로 확인,
+상한 10분 — 실제로는 1회 폴링 만에 도달). `root` 는 apply 완료 시점에
+이미 `Synced/Healthy` 였다.
+
+**수동 개입: 없었다.** 네 명령(`destroy` 2회, `apply` 2회) 이후 `argocd
+app list`·`curl` 확인까지 아무 것도 손으로 고치지 않았다. 네트워크 사고
+당시의 `hard refresh` 패치는 **이 Step 7 복원과는 별개 사건**이고(위
+참고), 이번 destroy→apply 사이클에는 그런 개입이 없었다.
+
+```bash
+$ argocd login argocd.localtest.me:8081 --username admin --plaintext
+'admin:login' logged in successfully
+
+$ argocd app list
+NAME            STATUS  HEALTH   SYNCPOLICY  REPO                                              PATH
+argocd/podinfo  Synced  Healthy  Auto-Prune  https://github.com/Melting-Face/argocd-study.git  gitops/manifests/podinfo
+argocd/root     Synced  Healthy  Auto-Prune  https://github.com/Melting-Face/argocd-study.git  gitops/apps
+
+$ curl -sS -o /dev/null -w '%{http_code}\n' http://argocd.localtest.me:8081
+200
+$ curl -sS -o /dev/null -w '%{http_code}\n' http://podinfo.localtest.me:8081
+200
+```
+
+**암호**: `argocd-initial-admin-secret` 이 새 클러스터에서 다시
+런타임 생성됐다(Task 6 에서 예견한 대로) — 새 비밀번호(16자)로만
+로그인됐고 이전 비밀번호는 쓰지 않았다(별도로 재확인하지 않음).
+
+**kubeconfig 인증서**: 새 클러스터는 인증서가 바뀌지만, `kind` Terraform
+provider 가 `kubeconfig_path`(`~/.kube/argocd-study.config`) 를 apply
+때마다 덮어쓰기 때문에 `kubectl`/`argocd` 모두 캐시 문제 없이 즉시
+연결됐다 — "옛 캐시로 실패" 현상은 **관측되지 않았다**.
+
+**승인 프롬프트**: `.claude/settings.json` 의 `ask` 패턴에
+`Bash(terraform * destroy*)` 가 있지만, 이번 두 번의
+`terraform destroy -auto-approve` 실행 모두 **승인 프롬프트가 뜨지
+않았다.** 세션이 설정을 핫리로드하지 않는 것인지 패턴이 여전히 안
+맞는 것인지는 이번 관측만으로는 가를 수 없다 — **미확인**으로
+남긴다(이전 구현자가 겪은 것과 같은 음성 결과의 재현).
+
+**총 소요**: `platform destroy` 시작부터 `podinfo` 가 `Healthy` 가
+되기까지 약 4분 50초(destroy 2회 ≈ 15초 + apply 2회 ≈ 3분12초 +
+podinfo 전개 11초, 각 단계 사이 명령 전환 시간 포함).

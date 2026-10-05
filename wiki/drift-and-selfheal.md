@@ -305,5 +305,47 @@ root가 멈춰서 삭제 자체가 시도되지 않았다. **미확인.** 다음
    재시작 때문인지 호스트 유휴 때문인지 **단일 원인으로 확정하지
    못했다** — 둘 다 후보로 남긴다.
 
-이 셋 모두 Phase 2 과제(또는 별도 인프라 안정화 작업)로 넘긴다 — 이
+4. **호스트 와이파이 단절이 클러스터 내부 DNS까지 전파됐다.** Task 8
+   착수 전, 호스트 네트워크가 끊긴 동안 root Application이
+   `Unknown/ComparisonError`에 빠졌다. `argocd app get root`의 에러
+   메시지:
+
+   ```
+   ComparisonError: Failed to load target state: failed to generate manifest for
+     source 1 of 1: rpc error: code = Unknown desc = failed to list refs:
+     Get "https://github.com/Melting-Face/argocd-study.git/info/refs?service=git-upload-pack":
+     dial tcp: lookup github.com on 10.96.0.10:53: no such host
+   ```
+
+   `10.96.0.10`은 클러스터 내부 CoreDNS의 ClusterIP다. 호스트가
+   인터넷(따라서 DNS 상위 전달)을 잃으면, kind 노드의 컨테이너 런타임도
+   같은 호스트 네트워크 경로를 타기 때문에 CoreDNS의 upstream forward가
+   실패하고, 그 실패가 `github.com` 조회 실패로 `repo-server`까지
+   전파된다. 이 메시지는 **이전 구현자가 중단 당시 실제로 받은 에러를
+   그대로 인용한 것**이고, 이번 Task 8 담당자가 재현한 것은 아니다 —
+   네트워크는 Task 8 착수 전에 이미 복구돼 있었다.
+
+   같은 창에서 `repo-server`가 재시작 루프(관측된 restart count r=42)에
+   다시 들어갔다. 이는 위 1번 항목(`healthz?full=true` probe 타임아웃)과
+   같은 증상이지만 **원인은 다르게 추정된다** — `/healthz?full=true`가
+   repo 연결 상태까지 확인하기 때문에 DNS 실패가 probe 실패로 이어졌을
+   것으로 보인다. **이것은 추정이며 로그로 직접 확인하지 못했다. 미확인
+   으로 남긴다.**
+
+   복구 절차: 호스트 네트워크 회복 후(클러스터 내부에서
+   `nslookup github.com`이 다시 성공하는 것으로 확인) root Application에
+   `argocd.argoproj.io/refresh: hard` annotation을 패치하자 즉시
+   `Synced/Healthy`로 돌아왔다. 자동 폴링(기본 3분 주기)을 기다리지
+   않고 hard refresh로 강제한 것이라, 이 복구 자체는 **수동 개입**이다.
+
+   🔑 이 사고는 실험 5의 "안전한 실패 모드" 발견을 실제 장애로 뒷받침
+   한다 — Git에 닿지 못하는 몇 시간 동안 ArgoCD는 **아무것도 지우지
+   않았다.** `podinfo` Application과 그 하위 리소스는 root가
+   `ComparisonError`에 갇혀 있던 내내 `Synced/Healthy`로 유지됐다(이
+   관측 역시 이전 구현자의 것이며, 이번 담당자는 네트워크 복구 이후의
+   상태만 직접 확인했다). 소스를 못 읽으면 "비교를 포기하고 멈춘다"는
+   동작이, 사람이 설계한 실험(실험 5)에서만 성립하는 게 아니라 실제
+   우발적 장애에서도 동일하게 성립함을 보여준다.
+
+이 넷 모두 Phase 2 과제(또는 별도 인프라 안정화 작업)로 넘긴다 — 이
 Task의 범위는 관측이지 수리가 아니다.
