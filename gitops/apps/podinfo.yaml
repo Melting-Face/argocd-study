@@ -22,9 +22,10 @@ spec:
     # §3-1 소유권 경계: Terraform은 클러스터 "안"의 어떤 것도 소유하지 않는다.
     namespace: podinfo
   syncPolicy:
-    # 🧪 Task 8 실험 3 — selfHeal: true 추가. 이제부터 클러스터에 생긴 수동
-    # 드리프트도 주기적 조정으로 되돌아간다(wiki/drift-and-selfheal.md).
+    # 🧪 Task 8 실험 4 — prune: false 를 명시한다. 매니페스트에서 리소스를
+    # 지워도 클러스터에는 고아로 남는지 관측한다(wiki/drift-and-selfheal.md).
     automated:
       selfHeal: true
+      prune: false
     syncOptions:
       - CreateNamespace=true
