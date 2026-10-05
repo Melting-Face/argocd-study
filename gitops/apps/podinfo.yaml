@@ -15,7 +15,15 @@ spec:
   source:
     repoURL: https://github.com/Melting-Face/argocd-study.git
     targetRevision: main
-    path: gitops/manifests/podinfo
+    # Phase 2 Task 2 — plain manifest(gitops/manifests/podinfo)에서 Helm chart
+    # (gitops/charts/podinfo, Task 1이 작성)로 소스 타입을 전환한다. chart의
+    # values.yaml 기본값이 이미 Phase 1 manifest 실측값과 동일해서(T1 동등성
+    # 검증, equivalence.sh PASS) values 오버라이드가 필요 없다 — helm 블록을
+    # 빈 채로 둔다. 이 전환이 selector.matchLabels를 바꾸지 않으면(불변 필드)
+    # 파드가 재생성되지 않아야 한다 — 그게 이 실험의 관측 대상이다
+    # (wiki/argocd-source-types.md).
+    path: gitops/charts/podinfo
+    helm: {}
   destination:
     server: https://kubernetes.default.svc
     # 🔴 네임스페이스는 Terraform이 아니라 ArgoCD가 만든다(CreateNamespace=true) —
