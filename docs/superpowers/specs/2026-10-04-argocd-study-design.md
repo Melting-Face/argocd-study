@@ -117,8 +117,20 @@ Terraform이 되돌리고 ArgoCD가 다시 맞추는 **무한 sync 루프**가 �
 **바닥을 kind-on-podman으로 못박지 않는다.** docker일 수도, k3s일 수도 있다.
 이 계약이 이 프로젝트에서 가장 값진 산출물이며, 위키 노트 한 장을 따로 받는다.
 
-substrate 의존이 남는 컴포넌트는 **ingress-nginx 하나뿐**이고,
+substrate 의존이 남는 **주된** 컴포넌트는 ingress-nginx이고,
 `var.ingress_profile` (`kind` | `loadbalancer`)로 values 파일을 고르는 방식으로 격리한다.
+
+🔴 **정정 (2026-10-05)** — "ingress-nginx 하나뿐"은 **부정확했다.** 결합점이 둘 더 있다:
+
+| 결합점 | 위치 | 다른 substrate에서 깨지는 방식 |
+| --- | --- | --- |
+| `hostname: argocd.localtest.me` | `values/argocd.yaml.tftpl` | 호스트명 해석 방식이 substrate마다 다르다 |
+| `http://…:${var.http_host_port}` | `platform/outputs.tf` | `loadbalancer` 프로파일에는 **호스트 포트 매핑이 없어** URL이 틀린다 |
+
+즉 `ingress_profile` 을 `loadbalancer` 로 바꾸면 ingress-nginx values는 맞게 갈리지만
+**접속 URL은 여전히 kind 전제(`:8081`)로 조립된다.** 계약을 완성하려면
+substrate가 `base_url` 류를 내보내거나, `platform` 이 프로파일별로 URL을 조립해야 한다.
+**지금 하지 않는다**(YAGNI) — 두 번째 substrate가 생길 때 처리한다.
 
 ### 3-3. 부트스트랩 / 해체 순서
 
@@ -611,7 +623,7 @@ terraform -chdir=terraform/platform  apply
 | R12 | `*.localtest.me` 외부 DNS 의존 | 저 | 저 | 폴백: `/etc/hosts` 또는 `nip.io` (둘 다 실측 확인) | 없음 |
 | R13 | **승인 게이트가 없다** — `permissions.ask`/`deny` 패턴이 전부 무효였다 | 고 | 고 | 비가역 명령만 올바른 형태로 교정. 일상 명령은 **의도적으로 게이트 없음** | 🔴 아래 상세 |
 | R14 | **D5 `extraObjects` 가 작동하지 않았다** — 차트 CRD가 `templates/crds/` 에 있어 같은 릴리스로 CR을 못 만든다 | — | — | root Application 전용 로컬 chart를 두 번째 `helm_release` 로 분리 | ✅ 해소 (§5 D5 정정) |
-| R15 | **repo-server 가 liveness probe 로 반복 재시작** — 차트 기본 `timeoutSeconds: 1` 이 단일 노드 kind 에서 `/healthz?full=true` 에 부족 | 고 | 중 | probe 타임아웃 상향 | 🔴 Task 8의 **복구 지연 측정을 오염**시킨다 |
+| R15 | **repo-server 가 liveness probe 로 반복 재시작** — 차트 기본 `timeoutSeconds: 1` 이 단일 노드 kind 에서 `/healthz?full=true` 에 부족 | 고 | 중 | probe 타임아웃 1→5초 | 🟡 **해소 여부 미확정 — 아래 상세** |
 
 ### R1 상세 — podman 선택에 `KIND_EXPERIMENTAL_PROVIDER`가 안 먹는다
 
@@ -666,6 +678,26 @@ Task 4에서 `terraform apply`·`git commit`·`git push`를 실행했을 때 **�
 우회(`curl --json`, `python3 urlopen(data=…)`, 변수 조립 `-X${M}`, `scp`/`nc`)는 그대로 남는다.
 
 ⇒ **이 저장소에 발신 차단은 없다.** 실제 방어선은 §9 층 4(사람)와 규율이다.
+
+### R15 상세 — probe 상향의 효과가 **미확정이다** (2026-10-05)
+
+Task 6에서 `repoServer.{liveness,readiness}Probe.timeoutSeconds` 를 1→5로 올렸다.
+그 뒤 **서로 다른 세 관측**이 쌓였고, **어느 쪽이 현재를 대표하는지 모른다.**
+
+| 관측 | 환경 | 결과 |
+| --- | --- | --- |
+| Task 6 fix 직후 | 상향 적용된 클러스터 | **16분 동안 restart=0** (같은 파드 이름으로 1분 간격 추적) |
+| Task 8 중 | 같은 클러스터, 장시간 | **4시간 40분 동안 34회**, 이후 40회까지 증가 |
+| 최종 리뷰 시점 | **Step 7로 재구축된 클러스터** | **5시간 40분 restart=0** |
+
+🔴 **결론을 내지 않는다.** 세 관측 사이에서 **클러스터 인스턴스와 설정이 둘 다 바뀌었고**,
+교란 변수를 분리할 관측이 없다. 중간 관측(34회)이 일어난 구간에는 **와이파이 단절로
+클러스터 DNS가 죽어 있던 시간**이 포함된다 — `/healthz?full=true` 가 repo 연결을
+확인하기 때문이라는 설명이 가능하지만, **로그로 직접 확인하지 못했다. 미확인.**
+
+판정 기준을 미리 적어 둔다: 재현된다면 ① `timeoutSeconds` 를 더 올리거나
+② `httpPath` 를 `/healthz`(`full=true` 없이)로 바꾸는 선택지가 있다.
+**그 전에 원인을 먼저 특정한다** — 증상에 값을 올려 덮는 것은 이 저장소의 방식이 아니다.
 
 ---
 
