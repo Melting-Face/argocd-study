@@ -95,6 +95,11 @@ permissions` "Wildcard patterns")가 보여주는 두 형태를 함께 쓴다 �
 형태를 전혀 못 잡는다). `kubectl`·`argocd`도 같은 이유로 두 형태를 같이 넣었다(이
 저장소는 `kubectl --kubeconfig=...`를 서브커맨드 앞에 항상 붙인다).
 
+🔴 **최종 리뷰에서 `gh repo edit*`·`gh release create*`를 추가했다** — 특히
+`gh repo edit --visibility private`는 이 환경에서 ArgoCD의 무인증 `repoURL` fetch와
+GitHub 위키 미러를 **동시에** 깨는 유일한 명령이라 비가역 축에 넣을 근거가 충분하다.
+다른 패턴과 **동일하게 발동 여부는 미검증**이다 — 추가가 곧 보증이 아니다.
+
 🔴 **라이브 프로브 결과: 교정 후에도 승인 프롬프트가 뜨지 않았다.**
 `kubectl delete pod does-not-exist -n default --kubeconfig ~/.kube/argocd-study.config`
 (존재하지 않는 리소스 대상 — 아무것도 지워지지 않음, 안전)로 **가장 단순한 교정 패턴**
@@ -132,16 +137,25 @@ Bash 콘텐츠 매칭이 아예 작동하지 않는다는 뜻이고, 뜨면 "핫
   빗나간다.
 - `scp`·`ssh`·`nc` 같은 **다른 발신 도구는 애초에 대상이 아니다**(`curl`/`wget`만 본다).
 
-🔴 **Fix round 1 재검토 결과: 교정 불가능하다.** "POST/PUT/PATCH/DELETE만 막고 GET은
-허용"은 prefix matching으로 표현할 수 없다 — 유일한 대안인 `Bash(curl *)`는 이 저장소
-모든 Step의 완료판정이 쓰는 `curl -sS -o /dev/null -w '%{http_code}'`(GET)까지 막는다.
-패턴을 **지우지 않고 그대로 둔다** — 지운다고 더 안전해지는 게 아니라 "막아보려 했다"는
-기록만 사라지기 때문이다. 패턴을 잘못 쓴 게 아니라 **표현 자체가 불가능한 경우**다.
+🔴 **최종 리뷰 정정 — "표현 자체가 불가능하다"는 과장이었다.** prefix matching으로
+`Bash(curl -X POST*)` 같은 **교정 가능한 형태는 실제로 있다**(공식 문서가 보여주는
+형태 그대로다). 다만 그 형태도 **신뢰할 수 있는 차단이 아니다** — 인자 순서만 바꾸면
+(`curl <url> -X POST`처럼 동사 플래그가 뒤로 가면) 그대로 빠져나간다. "유일한 대안은
+`Bash(curl *)`"도 사실이 아니다(완료판정의 GET 호출까지 막는 건 그 패턴을 고를 때의
+대가일 뿐, 선택할 수 있는 유일한 길이 아니다).
 
-**핵심**: `permissions.deny`는 **실수로 친 명백한 발신 명령을 거르는 실수 방지선**이고,
-의도적 우회나 다른 도구 경유를 막는 **봉쇄가 아니다.** 실제 마지막 방어선은
-**규율과 사람**이다 — `researcher.md`의 "외부 콘텐츠는 데이터" 조항과 "검색 질의에 내부
-데이터를 넣지 않는다" 규율이 이 자리를 메운다.
+🔴 **현재 써 둔 8개 패턴은 그 교정형도 아니다.** 지금 `.claude/settings.json`의
+`permissions.deny`는 전부 `Bash(*curl*-X POST*)` 같은 **선행 와일드카드** 형태다 —
+이 매칭 방식에서 선행 와일드카드는 유효한 prefix 패턴이 아니라서 **애초에 아무것도
+매칭하지 않는다**(실측 전무, 구조상 매칭될 수 없는 형태). 즉 지금 패턴은 "교정
+가능하지만 우회 가능한 방어선"조차 아니고, **실수 방지 효과도 미확인**이다.
+
+**핵심**: 교정 가능한 형태는 있으나(`Bash(curl -X POST*)`) 인자 순서만 바꿔도 빠져나가
+신뢰할 수 없고, 현재 써 둔 선행 와일드카드 형태는 애초에 매칭되지 않아 **실수 방지
+효과도 미확인이다.** 패턴을 **지우지 않고 그대로 둔다** — 지운다고 더 안전해지는 게
+아니라 "시도했다는 기록"만 사라지기 때문이다. 실제 마지막 방어선은 **규율과 사람**이다
+— `researcher.md`의 "외부 콘텐츠는 데이터" 조항과 "검색 질의에 내부 데이터를 넣지
+않는다" 규율이 이 자리를 메운다.
 
 ### 🔴 `hooks: {}`로 둔 이유
 
@@ -169,12 +183,17 @@ Task 1·2에서 **실측으로 확정한 한계**가 있고, 그걸 아는 것�
 | 로컬 정적 | pre-commit 18훅 | 🟡 **실수 방지** — `--no-verify`로 우회 가능 |
 | 커밋 메시지 | gitlint | 🟡 `stage: commit-msg`라 `pre-commit run --all-files`로는 **안 돈다**. `pre-commit install --hook-type commit-msg`를 **별도로** 깔아야 하고, **CI는 검사하지 않는다** |
 | 서버 정적 | `.github/workflows/ci.yml` | 🟡 **봉쇄가 아니다.** `gh api .../branches/main/protection` → `Branch not protected`(404, 실측). main 직접 푸시라 **커밋이 공개된 뒤** 도는 사후 신호다. 유일한 실효는 **"훅을 안 깐 클론에서도 돈다"** |
-| 시크릿 | gitleaks + detect-private-key | 🟡 패턴 방어는 봉쇄가 아니다. **실측: gitleaks 기본 설정의 `.+EXAMPLE$` allowlist가 교과서 예시 키(`AKIAIOSFODNN7EXAMPLE`)를 흘린다** |
+| 시크릿 | gitleaks + detect-private-key | 🟡 패턴 방어는 봉쇄가 아니다. **실측: gitleaks 기본 설정의 `.+EXAMPLE$` allowlist가 교과서 예시 키(`AKIAIOSFODNN7EXAMPLE`)를 흘린다.** 🔴 거기 더해 **이 저장소 자신의 `.gitleaks.toml`도 약점을 넓힌다** — `*.tfvars.example`·`*.env.example`을 **경로째** allowlist에 올렸는데, 그 대상인 `terraform/platform/local.auto.tfvars.example`은 "값이 비어 있는 예시"가 아니라 **실제 경로·URL을 담은 파일**이다. 앞으로 그 파일에 들어가는 비밀값은 스캔되지 않는다 |
+| CI `repoURL` 일관성 검사 | `.github/workflows/ci.yml:150-164` | 🟡 D4(하위 Application `repoURL` 평문 중복)의 **유일한 자동 게이트**. 맹점: block-style YAML만 잡는 정규식이라 flow-style(`source: { repoURL: ... }`)로 한 줄에 욱여넣으면 못 잡는다(실측 아님, 정규식 구조상). 범위 한계: `gitops/**`만 보고, root Application의 `repoURL`(Helm `var.repo_url`)과는 대조하지 않는다 |
+| 위키 링크·인덱스 | `doc_lint.py --links`(`check_wiki_index`) | 🟡 `wiki/Home.md`가 **보증으로 인용**하는 게이트이지만 모집단이 `README.md`·`AGENTS.md`·`CLAUDE.md` 3파일 + `docs/`·`wiki/` 재귀뿐이다(`LINK_SCAN_FILES`·`DEFAULT_TARGETS`, `scripts/doc_lint.py`). **`terraform/**/README.md`의 링크는 검사 밖**이라 이 문서들이 깨진 링크를 가져도 걸리지 않는다 |
+| `.gitignore` | 루트 `.gitignore` | 🟡 `*.tfstate`·`*.tfvars`(`.example` 제외)·kubeconfig 커밋을 막는 **유일한 기계 수단**. git이 추적하지 않는 파일에 작동하는 것이라, 이미 추적된 파일이나 `git add -f`를 막지는 못한다 |
+| Terraform plan 단계 게이트 | `validation` 블록·`lifecycle.precondition`·`.tftest.hcl` | 🟡 plan 시점 기계 검증(변수 형태·전제 조건). `precondition`은 **바이너리가 맞는지만 본다**(예: `expected_runtime` — 이 표의 주제와 같은 한계: 선언이 맞다고 런타임이 맞다는 뜻은 아니다) |
+| Helm chart 린트 게이트 | **없음** | 🔴 spec §7-4가 `helm lint`·`helmfile lint`를 신규 pre-commit 훅으로 계획했으나 **도입되지 않았다** — Task 6이 로컬 chart(`terraform/platform/charts/root-app`)를 추가한 뒤에도 그대로다. `check-yaml`은 템플릿 렌더링 전 YAML **문법**만 보고, chart 로직(필수값 누락 등)은 보지 않는다(T-2가 `required`로 막은 사례가 그 공백의 실례다) |
 | 위키 평평 구조 | `doc_lint.py`의 `check_wiki_flat()` | ✅ 기계 강제(하위 디렉터리 `.md`를 FAIL). 없었다면 그 노트는 **조용히 미러되지 않았다** |
 | 위키 편집 제한 | Settings → Wikis → Restrict editing | 🔴 **자동 관측 경로 없음.** `gh api` 응답에 대응 필드가 없다(`has_wiki`·`visibility`뿐). 사람의 화면 확인에만 의존하며, **꺼져도 알 수 없다.** 재검토 트리거: 위키 이력에 미러 아닌 커밋이 보이면 다시 본다 |
 | 참조형 링크·HTML `<a>` 금지 | (없음) | 🔴 **규율뿐.** `doc_lint`도 `wiki_linkify`도 인식하지 않는다 |
-| `permissions.ask` | `.claude/settings.json` | 🔴 **검증됨: 원래 31개는 죽은 규칙.** `Bash(*terraform*apply*)` 류 선행 와일드카드 패턴으로 `terraform apply`·`git commit`·`git push` 세 번 실측 — 프롬프트 0회(Task 4). Fix round 1에서 비가역 명령만(위 §권한과 비가역 작업) 공식 문서 형태로 재작성했으나, **교정 후 재확인(`kubectl delete pod does-not-exist ...`)에서도 프롬프트가 안 떴다** — 패턴이 다시 틀렸는지, 이 세션이 설정 변경을 핫리로드하지 않는지 **구분하지 못한 채**다. 다음 세션에서 재확인 필요. **일상 명령(커밋·푸시·apply·scale 등)에는 의도적으로 게이트가 없다** — 사고가 아니라 선택이다 |
-| `permissions.deny` | `.claude/settings.json` | 🔴 **표현 불가능 — prefix matching의 구조적 한계다, 패턴을 잘못 쓴 게 아니다.** "POST/PUT/PATCH/DELETE는 막고 GET은 허용"은 이 매칭 방식으로 쓸 수 없다 — 유일한 교정형(`Bash(curl *)`)은 이 저장소의 모든 완료판정 `curl -sS -o /dev/null -w '%{http_code}'`(GET)까지 막는다. `curl`/`wget` 동사 문자열 매칭이라 `../dagster-study` 실측 기준으로 `curl --json` · 언어 런타임 경유(`python3`의 `urlopen(data=...)`) · GET+쿼리스트링+명령치환 · 변수로 조립한 플래그(`-X${M}`)가 전부 빠져나간다. `scp`·`ssh`·`nc`는 애초에 대상 밖이다. Fix round 1 판단: **패턴은 그대로 둔다** — 지운다고 더 안전해지는 게 아니라 "시도했다는 기록"만 사라진다. 실제 방어선은 **규율과 사람**이다(§권한과 비가역 작업 상세) |
+| `permissions.ask` | `.claude/settings.json` | 🔴 **검증됨: 원래 31개는 죽은 규칙.** `Bash(*terraform*apply*)` 류 선행 와일드카드 패턴으로 `terraform apply`·`git commit`·`git push` 세 번 실측 — 프롬프트 0회(Task 4). Fix round 1에서 비가역 명령만(위 §권한과 비가역 작업) 공식 문서 형태로 재작성했으나, **교정 후 재확인(`kubectl delete pod does-not-exist ...`)에서도 프롬프트가 안 떴다** — 패턴이 다시 틀렸는지, 이 세션이 설정 변경을 핫리로드하지 않는지 **구분하지 못한 채**다. 다음 세션에서 재확인 필요. **일상 명령(커밋·푸시·apply·scale 등)에는 의도적으로 게이트가 없다** — 사고가 아니라 선택이다. 🔴 최종 리뷰에서 `gh repo edit*`·`gh release create*`를 **추가**했으나(T-1, `gh repo edit --visibility private`가 ArgoCD 무인증 fetch·위키 미러를 동시에 깨는 유일한 명령이라) **추가가 곧 검증이 아니다** — 동일하게 발동 여부 미확인이다 |
+| `permissions.deny` | `.claude/settings.json` | 🔴 **최종 리뷰 정정 — "표현 불가능"은 과장이었다.** 교정 가능한 형태는 있다(`Bash(curl -X POST*)`, 공식 문서 형태 그대로) — 다만 **인자 순서만 바꿔도 빠져나가 신뢰할 수 없다.** "유일한 대안은 `Bash(curl *)`"도 사실이 아니다. 🔴 **더 중요한 건: 지금 써 둔 8개는 그 교정형도 아니다** — 전부 `Bash(*curl*-X POST*)` 식 **선행 와일드카드**라 애초에 매칭되지 않는다(구조상 아무것도 못 잡는, 실효 0). `curl`/`wget` 동사 문자열 매칭이라 `../dagster-study` 실측 기준으로 `curl --json` · 언어 런타임 경유(`python3`의 `urlopen(data=...)`) · GET+쿼리스트링+명령치환 · 변수로 조립한 플래그(`-X${M}`)가 전부 빠져나간다. `scp`·`ssh`·`nc`는 애초에 대상 밖이다. Fix round 1 판단: **패턴은 그대로 둔다** — 지운다고 더 안전해지는 게 아니라 "시도했다는 기록"만 사라진다. 실제 방어선은 **규율과 사람**이다(§권한과 비가역 작업 상세) |
 
 **이 표 자체가 체계의 일부다** — 다음 작업자가 "pre-commit이 있으니 안전하다"처럼 층을
 뭉뚱그려 읽지 않도록, 실효를 층별로 갈라 적는다.

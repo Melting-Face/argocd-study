@@ -10,7 +10,12 @@ useDefault = true
 [allowlist]
 description = "예시(.example) 파일만 경로로 제외한다 — 경로를 통째로 빼면 실제 키를 놓칠 수 있다"
 
-# 값이 비어 있는 예시 파일만 경로로 제외한다. (.gitignore 의 `*.tfvars` / `!*.tfvars.example` 과 짝)
+# 🔴 "값이 비어 있는 예시 파일만"이라는 근거는 실제와 다르다(최종 리뷰 정정) —
+# terraform/platform/local.auto.tfvars.example 은 비어 있지 않고 실제 경로·URL을
+# 담고 있다. 이 경로 제외는 .tfvars.example/.env.example 패턴에 맞는 파일 전체를
+# 빼므로, 앞으로 그 파일들에 들어가는 비밀값은 스캔되지 않는다 — AGENTS.md
+# "강제 수단과 그 한계" 표 gitleaks 행 참고. (.gitignore 의 `*.tfvars` /
+# `!*.tfvars.example` 과 짝)
 paths = [
     '''\.tfvars\.example$''',
     '''\.env\.example$''',

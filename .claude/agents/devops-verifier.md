@@ -21,9 +21,12 @@ model: sonnet
 - **실행 금지**: `argocd app sync`·`argocd app set`·`argocd app delete`·`argocd app rollback`
   (상태 변경), `kubectl apply`/`delete`/`patch`/`replace`/`scale`, `terraform apply`,
   `helm install`/`upgrade`/`rollback`, `helmfile apply`. **상태를 바꾸는 명령은 하나도
-  쓰지 않는다.** 이 금지는 역할 규율이고, `.claude/settings.json`의 `permissions.ask`도
-  같은 명령들을 승인 대상으로 걸어 **이중으로** 막는다(어느 한쪽만 믿지 않는다 —
-  [`AGENTS.md`](../../AGENTS.md) §권한과 비가역 작업).
+  쓰지 않는다.** 🔴 이 금지는 **역할 규율 한 겹뿐이다** — `.claude/settings.json`의
+  `permissions.ask`는 여기 열거한 것 중 `kubectl delete`·`argocd app delete`만 걸고
+  (그마저 실제 발동은 미확인), `argocd app sync`·`kubectl apply`/`patch`/`scale`·
+  `terraform apply`·`helm install`/`upgrade`·`helmfile apply`는 **ask 에 아예 없다**
+  (의도적으로 뺐다). "이중 방어"가 아니라 이 문서의 역할 경계가 **유일한** 방어선이다
+  ([`AGENTS.md`](../../AGENTS.md) §권한과 비가역 작업).
 - **실행 허용(조회만)**: `argocd app get`/`list`/`diff`·`argocd app history`,
   `kubectl get`/`describe`/`top`/`logs`, `helm status`/`history`, `helmfile status`,
   `terraform plan`(0-diff 확인용), `gh run list`/`view`(CI 결과 조회).

@@ -47,7 +47,12 @@ terraform apply -var-file=local.auto.tfvars
 
 ## 완료 판정 — ingress-nginx
 
+아래 `kubectl` 은 `export KUBECONFIG=~/.kube/argocd-study.config` 를 먼저 설정하고
+실행한다 — 안 하면 기본 kubeconfig 의 current-context(이 머신에서는 다른 프로젝트의
+`kind-lakehouse`)를 조회해 "No resources found"를 조용히 돌려준다.
+
 ```bash
+export KUBECONFIG=~/.kube/argocd-study.config
 kubectl get pods -n ingress-nginx                                 # controller Running
 kubectl get validatingwebhookconfiguration | grep ingress-nginx   # webhook 등록됨
 curl -sS -o /dev/null -w '%{http_code}\n' http://localhost:8081   # 404 (컨트롤러는 살아있고 라우트가 없다)
@@ -60,6 +65,8 @@ terraform plan -var-file=local.auto.tfvars                        # No changes
 것이다.
 
 ## 완료 판정 — ArgoCD
+
+`KUBECONFIG`는 위 ingress-nginx 절과 동일하게 `~/.kube/argocd-study.config`로 둔다.
 
 ```bash
 kubectl get pods -n argocd                                        # 7개 컴포넌트 전부 Running
@@ -142,9 +149,11 @@ $ dig +short podinfo.localtest.me
 
 ## 알려진 제약
 
-- `terraform destroy`는 이 README 작성 시점 기준 실행하지 않았다 — 이 클러스터가
-  이후 과제의 전제라 비가역 명령을 피했다(승인 게이트가 사실상 없다는 spec R13
-  판정 참고).
+- `terraform destroy`는 Task 8 Step 7 에서 전체 파괴·복원 절차 중 **2회 실행**했다
+  (스택별 1회 — platform·cluster/kind, 전체 파괴 → `apply` 2회로 복원, spec 성공
+  기준 5번 검증). 상세·실제 출력은
+  [`wiki/argocd-bootstrap.md`](../../wiki/argocd-bootstrap.md) "Task 8 Step 7" 절 참고.
+  이 전체 파괴·복원 절차 자체는 **1회 수행**이고 반복 재현은 미검증이다.
 - 이 저장소는 public 이라 ArgoCD root Application 에 repo 자격증명을 넣지 않았다.
   private 로 전환했을 때의 거동은 **실제로 전환해 확인하지 않았다** — 미확인으로
   남긴다([`wiki/argocd-bootstrap.md`](../../wiki/argocd-bootstrap.md) Review Focus (3)).

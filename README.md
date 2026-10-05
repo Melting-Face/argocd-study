@@ -46,7 +46,10 @@ terraform -chdir=terraform/platform init
 terraform -chdir=terraform/platform apply
 
 # 3) 확인 — port-forward 없이 바로 접근된다
-kubectl --context kind-argocd-study get pods -n argocd
+# --kubeconfig·--context 를 명시한다: 기본 kubeconfig 의 current-context 를 따라가면
+# 이 머신에 공존하는 다른 kind 클러스터(예: lakehouse)를 조회하게 된다
+kubectl --kubeconfig ~/.kube/argocd-study.config --context kind-argocd-study \
+  get pods -n argocd
 curl -sS -o /dev/null -w '%{http_code}\n' http://argocd.localtest.me:8081
 ```
 
@@ -62,9 +65,9 @@ terraform -chdir=terraform/platform  apply
 # Git 이 정본이므로 gitops/apps/** 의 애플리케이션은 전부 자동 복원되어야 한다
 ```
 
-`terraform/`·`gitops/`·`helmfile.yaml`은 설계가 확정된 뒤 이어지는 Task에서 생성된다 —
-지금 이 저장소에는 두 스택의 **설계**(디렉터리 레이아웃·소유권 경계·부트스트랩 순서)만
-있고 `.tf`·Application YAML 본체는 없다. 명령은 완성된 뒤의 절차를 미리 적어 둔 것이다.
+`terraform/`(스택 2개)·`gitops/apps/**`·`terraform/platform/charts/root-app`는 Phase 1 의
+Task 4~8 에서 전부 구현됐다 — 위 명령은 지금 이 저장소를 그대로 clone 해 실행하는
+절차다(설계만 있고 구현이 없던 시점의 기록은 더 이상 유효하지 않다).
 
 ## 문서 지도
 
@@ -81,7 +84,13 @@ terraform -chdir=terraform/platform  apply
 
 `.claude/agents/`에 서브에이전트 4종(`devops-engineer`·`devops-verifier`·`tech-writer`·
 `researcher`)이 있다. 각자의 역할·경계는 [`AGENTS.md`](AGENTS.md)를 본다.
-`terraform apply`/`destroy`·`helm install`/`upgrade`·`helmfile apply`/`sync`·
-`kubectl apply`/`delete`·`git commit`/`push` 등 비가역 작업은
-[`.claude/settings.json`](.claude/settings.json)의 `permissions.ask`에 걸려 **실행 전
-사용자 승인**을 거친다.
+
+[`.claude/settings.json`](.claude/settings.json)의 `permissions.ask`에는 **되돌릴 수
+없는 명령만** 올라가 있다 — `terraform destroy`/`state rm`·`mv`·`push`, `kind delete
+cluster`, `helm uninstall`, `helmfile destroy`, `argocd app delete`, `kubectl delete`,
+`git push --force`. `terraform apply`·`git commit`·`git push`(일반)·`helm install`/
+`upgrade`·`kubectl apply`/`patch`/`scale`·`argocd app sync`는 **의도적으로 게이트에서
+뺐다** — 되돌릴 수 있고, 세션 자체가 이미 승인된 작업이기 때문이다. 🔴 **이 패턴들이
+실제로 승인 프롬프트를 띄우는지는 미확인이다** — 라이브 프로브에서도 뜨지 않았다.
+정본과 실측 상세는 [`AGENTS.md`](AGENTS.md)의 "강제 수단과 그 한계" 표를 본다 — 개수·
+목록은 여기 다시 적지 않는다(다음에 또 어긋난다).

@@ -20,7 +20,9 @@
       "Bash(git push --force *)",
       "Bash(git push -f *)",
       "Bash(git push * --force*)",
-      "Bash(git push * -f*)"
+      "Bash(git push * -f*)",
+      "Bash(gh repo edit*)",
+      "Bash(gh release create*)"
     ],
     "deny": [
       "Bash(*curl*-X POST*)",

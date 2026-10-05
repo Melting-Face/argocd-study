@@ -8,6 +8,10 @@
 독립이고, 하나를 켜면 나머지도 같이 켜진다고 생각하면 실험 2에서
 틀린다.
 
+> ⚠️ 이 노트의 `kubectl`/`argocd` 명령은 전부 `export KUBECONFIG=~/.kube/argocd-study.config`
+> 를 먼저 설정한 뒤 실행한 것이다 — 이 머신의 기본 kubeconfig current-context 는
+> 다른 프로젝트의 `kind-lakehouse`라, 명시하지 않으면 그 클러스터를 조회한다.
+
 ## 실험 요약
 
 | # | 선행 상태 | 조작 | 관측 |

@@ -5,7 +5,7 @@
 # 🔑 substrate 계약(spec §3-2): 아래 4개는 terraform/cluster/kind 의 outputs 와
 # "이름·값"이 정확히 같아야 한다 — terraform_remote_state 를 쓰지 않기로 한 대가다
 # (wiki/terraform-stack-boundaries.md). cluster 스택의 output 을 바꾸면 이 파일도 같이 고친다.
-kubeconfig_path = "/Users/jin/.kube/argocd-study.config"
+kubeconfig_path = "~/.kube/argocd-study.config"
 kube_context    = "kind-argocd-study"
 ingress_profile = "kind"
 storage_class   = "standard"

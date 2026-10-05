@@ -53,9 +53,11 @@
 - **되돌리기 어려운 작업**(force push·history 재작성·브랜치/태그 삭제)은 사전 확인 후 진행한다.
   공개 저장소에서는 force push가 이미 clone된 사본에 남은 과거를 지우지 못한다.
 - 어시스턴트가 만든 커밋은 `Co-Authored-By` 트레일러를 남긴다.
-- **커밋·푸시는 사용자가 요청할 때만** 수행한다(임의 커밋·푸시 금지) —
-  `.claude/settings.json`의 `permissions.ask`가 `git commit`·`git push`를 승인 대상으로 둔
-  이유다.
+- **커밋·푸시는 사용자가 요청할 때만** 수행한다(임의 커밋·푸시 금지). 🔴 이것은 **역할
+  규율이고 기계 강제가 아니다** — `git commit`·`git push`(일반)는 `permissions.ask`에
+  한때 있었지만 Fix round 1(`a3fe57a`)에서 **제거됐다**(일을 잃지 않는 가역 명령이라는
+  판단, `AGENTS.md` §권한과 비가역 작업). `git push --force`/`-f`만 지금도 `ask`에
+  남아 있다.
 
 ## 참고
 

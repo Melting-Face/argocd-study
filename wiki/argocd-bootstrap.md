@@ -8,6 +8,12 @@ root Application 1개를 세우며 관측한 것을 적는다. 핵심은 하나�
 무엇으로 바꿨는지, 왜 그 대안이 D5 의 원칙(`kubernetes_manifest` 미사용)을
 여전히 지키는지를 적는다.
 
+> ⚠️ 이 노트의 `kubectl`/`argocd` 명령은 전부 `export KUBECONFIG=~/.kube/argocd-study.config`
+> 를 먼저 설정한 뒤 실행한 것이다 — 이 머신의 기본 kubeconfig current-context 는
+> 다른 프로젝트의 `kind-lakehouse`라, 명시하지 않으면 그 클러스터를 조회해 조용히
+> 틀린 결과(또는 "No resources found")를 돌려준다. 일부 명령은 그 위에 `--kubeconfig`·
+> `--context`를 다시 명시해 적었다.
+
 ## Terraform 2스택 apply 절차
 
 ```bash
@@ -261,6 +267,31 @@ $ kubectl get deploy argo-cd-argocd-repo-server -n argocd \
 적용 전후 모두 `Synced/Healthy`로 변화가 없었다 — 수정이 회귀를 만들지
 않았다.
 
+### 🔴 정정 — "해결"로 닫지 않는다
+
+이 절만 읽으면 probe 수정으로 repo-server 재시작이 끝난 것처럼 보이지만,
+[`drift-and-selfheal.md`](drift-and-selfheal.md) "참고" 절은 **같은 수정이 적용된
+채로** 4시간40분 동안 34회, 이후 6시간여 동안 40회까지 재시작이 늘었다고
+기록한다 — "16분 0회"는 짧은 검증 구간의 우연이었을 수 있다는 뜻이다.
+
+최종 리뷰 시점(2026-10-05, 클러스터를 Task 8 Step 7 에서 재구축한 뒤)에 다시
+확인한 값은 또 다르다: `kubectl --kubeconfig ~/.kube/argocd-study.config
+--context kind-argocd-study get pod -n argocd -l app.kubernetes.io/name=argocd-repo-server`
+가 **5시간40분 동안 재시작 0회**를 보였다.
+
+세 관측을 나란히 두면:
+
+| 관측 시점 | 관측 구간 | 재시작 |
+| --- | --- | --- |
+| probe 수정 직후 (이 절) | 16분 | 0회 |
+| Task 8 드리프트 실험 중 | 4시간40분 → 6시간여 | 34회 → 40회 |
+| 최종 리뷰 시점(재구축된 클러스터) | 5시간40분 | 0회 |
+
+**어느 쪽이 지금의 "정상"을 대표하는지 미확인이다.** 클러스터 인스턴스(Task 8
+Step 7 의 전체 파괴·재생성)와 그 사이 설정이 둘 다 바뀌었어서, "고쳐졌다"와
+"이번엔 운이 좋았다"를 가를 근거가 없다. 결론을 내리지 않고 세 값을 그대로
+남긴다.
+
 ## 초기 admin 비밀번호
 
 🔴 **`argocd-initial-admin-secret`은 Helm 템플릿에 없다**(실측:
@@ -426,6 +457,9 @@ No changes. Your infrastructure matches the configuration.
 실측으로 충족했다.
 
 ## Task 8 Step 7 — 전체 파괴와 복원 (2026-10-05, spec 성공 기준 5번)
+
+🔴 **1회 수행 — 반복 재현은 미검증이다.** 아래는 이번 한 번의 실행에서 나온 실제
+출력이고, 매번 같은 시간·같은 순서로 끝난다는 보장은 아니다.
 
 Task 8 착수 전, 호스트 와이파이 단절로 root Application 이
 `Unknown/ComparisonError` 에 갇혔던 사고가 있었다(자세한 경위와 에러
