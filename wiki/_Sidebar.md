@@ -7,6 +7,7 @@
 - [argocd-bootstrap](argocd-bootstrap.md)
 - [first-application](first-application.md)
 - [drift-and-selfheal](drift-and-selfheal.md)
+- [argocd-source-types](argocd-source-types.md)
 
 **Terraform · Helm · Helmfile 축**
 

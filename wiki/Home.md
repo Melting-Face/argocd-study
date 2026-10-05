@@ -23,7 +23,7 @@ ArgoCD·Terraform·Helm·Helmfile 네 도구를 한 저장소에서 다루는
 - **ArgoCD 축** — [부트스트랩](argocd-bootstrap.md) →
   [첫 애플리케이션](first-application.md) →
   [드리프트와 self-heal](drift-and-selfheal.md) →
-  소스 타입(Helm/Helmfile/plain manifest) → Airflow 배포
+  [소스 타입 전환](argocd-source-types.md) → Airflow 배포
 - **Terraform·Helm·Helmfile 축** — [kind 위의 Terraform](terraform-on-kind.md),
   [스택 경계와 폭발반경](terraform-stack-boundaries.md),
   [Helm chart 작성](writing-a-helm-chart.md), Helmfile과 Terraform의 비교
