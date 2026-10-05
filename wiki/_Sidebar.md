@@ -6,6 +6,7 @@
 
 - [argocd-bootstrap](argocd-bootstrap.md)
 - [first-application](first-application.md)
+- [drift-and-selfheal](drift-and-selfheal.md)
 
 **Terraform · Helm · Helmfile 축**
 

@@ -17,11 +17,12 @@ ArgoCD·Terraform·Helm·Helmfile 네 도구를 한 저장소에서 다루는
 ## 지금 상태
 
 스택 A(kind 클러스터)와 스택 B(ingress-nginx·ArgoCD)를 세우고, 첫 Application
-(podinfo)을 커밋만으로 띄워보며 노트 4장이 생겼다. 나머지 구간은 이후 과제가
-진행되며 채워진다.
+(podinfo)을 커밋만으로 띄워본 뒤 드리프트·self-heal 실험까지 마쳐 노트 5장이
+생겼다(Phase 1 목표치). 나머지 구간은 Phase 2 과제로 넘긴다.
 
 - **ArgoCD 축** — [부트스트랩](argocd-bootstrap.md) →
-  [첫 애플리케이션](first-application.md) → 드리프트와 self-heal →
+  [첫 애플리케이션](first-application.md) →
+  [드리프트와 self-heal](drift-and-selfheal.md) →
   소스 타입(Helm/Helmfile/plain manifest) → Airflow 배포
 - **Terraform·Helm·Helmfile 축** — [kind 위의 Terraform](terraform-on-kind.md),
   [스택 경계와 폭발반경](terraform-stack-boundaries.md), Helm 차트 작성,
