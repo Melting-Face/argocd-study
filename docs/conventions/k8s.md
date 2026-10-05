@@ -74,6 +74,30 @@ resources:
 - Helm 차트를 직접 작성할 때는(Step 3 `gitops/charts/podinfo/`) `helm lint`로 검증하고,
   `helm template`로 렌더링한 결과를 plain manifest와 비교해 **의미 있는 차이만** 남는지 본다.
 
+### 7-1. 이 저장소에서 작성하는 Helm chart가 지킬 것
+
+이 저장소가 직접 작성한 chart(`terraform/platform/charts/root-app`,
+`gitops/charts/podinfo`)는 아래를 지킨다 — 업스트림(outside) chart를 그대로 쓰는
+경우(예: ingress-nginx)는 대상이 아니다.
+
+- **버전을 정확히 고정한다** — `Chart.yaml`의 `version`·`appVersion`에 범위 연산자
+  (`~>` 등)나 `latest`를 쓰지 않는다(전역 CLAUDE.md·§4와 같은 원칙).
+- **`required`로 필수값을 강제한다** — `values.yaml` 기본값이 비어도 되는 필드는
+  없다고 보고, 비었을 때 깨져야 하는 값(이미지 태그, ingress host, resources
+  4값 등)은 템플릿에서 `required "에러 메시지" .Values.xxx`로 감싼다.
+  🔴 **초록불 함정** — `helm lint --strict`는 `required` 미충족을 ERROR가 아니라
+  WARN으로만 내고 exit 0으로 통과한다(실측, `.pre-commit-config.yaml`의
+  `helm-lint` 훅 주석). **`helm template`(렌더 실행)만 실제로 실패시킨다** —
+  값 수준 검증은 `helm lint`가 아니라 `helm template`/equivalence 테스트로 한다.
+- **레이블 규약** — 정답지(plain manifest)가 이미 떠 있는 리소스를 chart로
+  재작성할 때는 `selector.matchLabels`·pod 템플릿 레이블·`Service.spec.selector`를
+  기존 레이블과 **글자 그대로** 맞춘다. `Deployment.spec.selector`는 생성 후
+  불변 필드라, 여기서 어긋나면 Deployment가 교체되며 파드가 재생성된다. Helm이
+  관용적으로 붙이는 `app.kubernetes.io/managed-by`·`helm.sh/chart` 레이블은
+  리소스 자신의 `metadata.labels`에만 넣고 selector/pod 템플릿에는 넣지 않는다.
+- **`.helmignore`를 둔다** — 패키징 대상이 아닌 파일(테스트 스크립트 등)을
+  chart 아카이브에서 뺀다.
+
 ## 8. 클러스터 노출·연결 규칙 (kind-on-podman)
 
 > 이 절은 `../dagster-study` §10의 kind/ingress 관련 교훈만 남긴 것이다. 이 프로젝트의

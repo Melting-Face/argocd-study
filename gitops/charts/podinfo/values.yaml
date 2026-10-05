@@ -1,0 +1,40 @@
+# podinfo chart 기본값 — Phase 1 plain manifest(gitops/manifests/podinfo/*.yaml)가
+# 실측으로 확정한 값을 그대로 옮겼다. 기본값만으로 `helm template`을 돌리면
+# Phase 1 매니페스트와 의미상 같은 결과가 나와야 한다(tests/equivalence.sh).
+#
+# 🔴 보안에 민감하거나 이미지에 종속된 값(runAsUser/runAsGroup, containerPort,
+# probe 경로)은 여기 값으로 빼지 않고 templates/*.yaml에 상수로 박아 뒀다 — 실수로
+# values에서 바뀌면 바로 배포가 깨지는 값들이라, 바꾸려면 템플릿을 직접 고치게
+# 해서 "값 하나 바꿨을 뿐인데"로 묻히지 않게 한다. 아래 값들만 환경별로 바뀔 수
+# 있다고 보고 values로 노출한다(brief 요구: image.tag·replicaCount·ingress.host·
+# resources).
+
+replicaCount: 1
+
+image:
+  # 🔴 실측(2026-10-05): ghcr.io/stefanprodan/podinfo는 멀티아키(amd64/arm64)
+  # 이미지를 배포한다 — kind-on-podman의 arm64 노드에서도 그대로 동작함을 확인했다.
+  # latest 금지(docs/conventions/k8s.md §4) — 태그를 정확히 고정한다.
+  repository: ghcr.io/stefanprodan/podinfo
+  tag: "6.15.0"
+  pullPolicy: IfNotPresent
+
+service:
+  # containerPort·Service port·probe의 named port(http)가 전부 이 값을 쓴다.
+  port: 9898
+
+ingress:
+  className: nginx
+  host: podinfo.localtest.me
+
+# docs/conventions/k8s.md §2 — requests/limits 4값 필수. podinfo는 가벼운 Go 데모
+# 앱이라 업스트림 kustomize 예시(requests 100m/64Mi, limits 2000m/512Mi)보다 limits를
+# 좁혀 잡았다 — kind 노드가 podman machine 자원을 다른 프로젝트(lakehouse) 클러스터와
+# 나눠 쓴다(Phase 1 판단, gitops/manifests/podinfo/deployment.yaml 주석과 동일).
+resources:
+  requests:
+    cpu: "100m"
+    memory: "64Mi"
+  limits:
+    cpu: "500m"
+    memory: "128Mi"

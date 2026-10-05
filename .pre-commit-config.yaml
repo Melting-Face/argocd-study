@@ -1,4 +1,4 @@
-# 정적 품질 게이트 — pre-commit 훅 18개.
+# 정적 품질 게이트 — pre-commit 훅 19개.
 # 규칙의 단일 출처는 여기(그리고 각 훅 전용 설정 파일)이며,
 # .github/workflows/ci.yml 은 이 설정을 그대로 재실행할 뿐 규칙을 중복 정의하지 않는다.
 # 이후 모든 태스크의 커밋은 `pre-commit run --all-files` 를 통과해야 한다.
@@ -13,6 +13,16 @@ repos:
       - id: check-added-large-files
       - id: check-toml
       - id: check-yaml
+        # 🔴 Helm chart templates/ 는 Go 템플릿이지 순수 YAML이 아니다 — 실측
+        # (2026-10-05): _helpers.tpl의 공통 레이블 블록을 나머지 템플릿에서
+        # `{{- include "podinfo.labels" . | nindent 4 }}`처럼 한 줄 통째로 쓰면,
+        # PyYAML이 `{{`를 중첩 flow-mapping 시작으로 읽어 닫는 `}}`를 찾을 때까지
+        # 다음 줄들을 계속 끌어들이다 리스트 항목(`- name: ...`)의 `-`에서
+        # "expected the node content, but found '-'"로 깨진다. `helm
+        # lint --strict`·`helm template`(아래 helm-lint 훅·
+        # gitops/charts/podinfo/tests/equivalence.sh)이 렌더링 후 YAML로서의
+        # 정합성을 이미 검증하므로, 렌더 전 원문에 대한 이 검사는 제외한다.
+        exclude: '^(terraform/platform/charts/root-app|gitops/charts/podinfo)/templates/'
       - id: check-json
       # 저장소가 public 이므로 이 훅이 실제 방어선이다 — PEM/OpenSSH 키 "파일" 자체의 포맷을 본다.
       # gitleaks(아래)는 문자열 패턴을 보는 다른 축이라 역할이 겹치지 않는다.
@@ -42,6 +52,15 @@ repos:
     rev: v1.38.0
     hooks:
       - id: yamllint
+        # 🔴 check-yaml과 같은 이유로 제외한다 — 실측(2026-10-05): 위 check-yaml의
+        # 치명적 구문 오류까지는 안 가더라도, `replicas: {{ .Values.x }}`처럼
+        # 한 줄짜리 bare 표현식도 `{{`를 중첩 flow-mapping으로 읽어
+        # "too many spaces inside braces"를 낸다(braces 규칙은 기본 error
+        # 등급이라 훅이 실패한다). 정수형 필드(replicas·containerPort·
+        # Service port)는 렌더 결과가 실제 정수여야 해 literal 따옴표로
+        # 감싸는 우회(root-app의 문자열 전용 트릭)를 쓸 수 없다 — 애초에
+        # 렌더 전 원문을 YAML로 검사하는 것 자체가 범위 밖이라고 본다.
+        exclude: '^(terraform/platform/charts/root-app|gitops/charts/podinfo)/templates/'
 
   # 셸 스크립트 린트 — Task 1 시점엔 scripts/*.sh 가 없어 대상 0개로 스킵된다.
   # shellcheck-py 는 바이너리를 wheel 로 배포해 격리 venv 에 들어간다(로컬 설치 불필요).
@@ -95,6 +114,38 @@ repos:
       - id: terraform_tflint
         args:
           - --hook-config=--tool-version=0.64.0
+
+  # Helm chart 린트 게이트(Task 1, Phase 2) — spec §7-4가 신규 pre-commit 훅으로
+  # 계획했으나 Phase 1(Task 6이 첫 로컬 chart인 terraform/platform/charts/root-app
+  # 을 추가한 뒤까지)에는 도입되지 않은 채였다(AGENTS.md "강제 수단과 그 한계" 표의
+  # 기존 기록). 로컬에서 작성한 chart가 이제 둘이라(위 root-app, 아래
+  # gitops/charts/podinfo) 둘 다 깐다. 커뮤니티 pre-commit 훅 저장소에 기대지 않고
+  # `language: system` 로컬 훅으로 직접 호출한다 — 이미 설치된 helm 바이너리를
+  # 그대로 쓴다(다른 훅처럼 버전을 pre-commit이 받아 캐시하지 않으므로, 로컬·CI의
+  # helm 버전이 서로 다르면 린트 결과가 달라질 수 있다는 한계가 있다).
+  #
+  # 🔴 한계(실측, 2026-10-05) — `helm lint --strict`는 템플릿의 `required` 가드
+  # 미충족을 ERROR가 아니라 WARN으로만 낸다:
+  #   `level=WARN msg="missing required values" message="..."` , 그래도
+  #   "1 chart(s) linted, 0 chart(s) failed"로 **exit 0 통과**한다.
+  # 반면 `helm template`(렌더 실행)은 같은 상황에서 실제로 실패한다(exit 1,
+  # `Error: execution error at (...): ... 는 필수값이다`). 즉 이 훅은 Chart.yaml
+  # 구조 오류(필수 필드 누락 등 — 실측: `version:` 삭제 시 `[ERROR] Chart.yaml:
+  # version is required`로 exit 1)는 잡지만 **값 수준 required 위반은 놓친다** —
+  # "helm lint가 통과했다"를 "chart가 올바르다"로 읽지 않는다(이 저장소 규율).
+  # 값 수준 검증은 gitops/charts/podinfo/tests/equivalence.sh(내부에서 helm
+  # template을 호출한다)와 Task 2의 실제 배포 관측이 메운다.
+  - repo: local
+    hooks:
+      - id: helm-lint
+        name: Helm chart 린트 (helm lint --strict)
+        language: system
+        entry: >-
+          bash -c 'set -e;
+          for d in terraform/platform/charts/root-app gitops/charts/podinfo; do
+          echo "--- helm lint --strict $d ---"; helm lint --strict "$d"; done'
+        pass_filenames: false
+        files: '^(terraform/platform/charts/root-app|gitops/charts/podinfo)/'
 
   # Python 린트 + 포맷 (규칙은 pyproject.toml [tool.ruff], Task 2 에서 scripts/*.py 와 함께 추가)
   - repo: https://github.com/astral-sh/ruff-pre-commit

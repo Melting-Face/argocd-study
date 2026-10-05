@@ -1,0 +1,16 @@
+# podinfo 데모 앱 전용 Helm chart. Phase 1이 손으로 쓴 plain manifest
+# (gitops/manifests/podinfo/{deployment,service,ingress}.yaml)를 그대로 재작성한
+# 것이다 — 그 세 파일이 정답지이고, 이 chart는 `helm template`로 같은 결과를
+# 내야 한다(gitops/charts/podinfo/tests/equivalence.sh로 검증).
+#
+# 🔴 version(chart 버전)·appVersion(podinfo 버전) 둘 다 정확한 값으로 고정한다
+# (`~>`·`latest` 금지 — docs/conventions/k8s.md §7-1). appVersion은 단순 표기용
+# 메타데이터라 templates/*.yaml의 이미지 태그(values.yaml의 image.tag)와는 별개로
+# 관리하지만, 같은 값(6.15.0)으로 맞춰 둬야 `helm show chart`만 보고도 실제 배포
+# 버전을 알 수 있다.
+apiVersion: v2
+name: podinfo
+description: podinfo 데모 앱 — Phase 1 plain manifest를 Helm chart로 재작성한 것
+type: application
+version: 0.1.0
+appVersion: "6.15.0"

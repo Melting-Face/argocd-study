@@ -1,0 +1,88 @@
+# gitops/manifests/podinfo/deployment.yaml(Phase 1 정답지)를 그대로 재작성한
+# 것 — 필드 구성·순서·값 중 바뀐 것은 image.tag·replicas·resources·ingress 쪽
+# values化뿐이다. 보안 컨텍스트 숫자값과 레이블은 정답지와 글자 그대로 같다.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: podinfo
+  labels:
+    {{- include "podinfo.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "podinfo.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "podinfo.selectorLabels" . | nindent 8 }}
+    spec:
+      # 업스트림 이미지(alpine 베이스)는 Dockerfile에서 이미 `USER app`(비-root)으로
+      # 빌드된다 — runAsNonRoot는 그 사실을 강제로 재검증하는 역할이다.
+      #
+      # 🔴 실측(Phase 1, 2026-10-05) — runAsNonRoot: true만 두고 runAsUser를
+      # 비우면 배포가 CreateContainerConfigError로 깨진다: kubelet은 이미지의
+      # USER 지시어가 이름(app)이면 UID를 몰라 "non-root임"을 스스로 확인하지
+      # 못한다 — runAsUser를 숫자로 명시해야 통과한다.
+      # `podman run --rm --entrypoint id ghcr.io/stefanprodan/podinfo:6.15.0`로
+      # 실측한 값(uid=100(app) gid=101(app))을 그대로 못박는다 — values로 빼지
+      # 않는다(이미지에 종속된 값이라 실수로 바뀌면 바로 배포가 깨진다).
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 100
+        runAsGroup: 101
+      containers:
+        - name: podinfo
+          image: "{{ required "values.yaml의 image.repository 는 필수값이다" .Values.image.repository }}:{{ required "values.yaml의 image.tag 는 필수값이다 - latest 금지(docs/conventions/k8s.md §4)" .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ required "values.yaml의 service.port 는 필수값이다" .Values.service.port }}
+              protocol: TCP
+          # docs/conventions/k8s.md §6 — non-root, 권한 상승 금지, capability 전부
+          # drop. readOnlyRootFilesystem은 podinfo가 기본 설정(in-memory 캐시, 로컬
+          # 파일 비기록)에서는 루트 파일시스템에 쓰지 않아 켤 수 있다 — 단, 컨테이너
+          # 자체가 쓰는 /tmp만 emptyDir로 별도 마운트해 둔다(상태 저장이 아니라
+          # 일시 스크래치 공간).
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          # docs/conventions/k8s.md §2 — requests/limits 필수. 4값 모두 required로
+          # 막는다 — values.yaml 기본값이 비어도 helm lint --strict는 WARN만 내고
+          # 통과하므로(Phase 1 실측, AGENTS.md 강제 수단 표), helm template(렌더
+          # 실행)에서 확실히 터지게 한다.
+          resources:
+            requests:
+              cpu: {{ required "values.yaml의 resources.requests.cpu 는 필수값이다" .Values.resources.requests.cpu | quote }}
+              memory: {{ required "values.yaml의 resources.requests.memory 는 필수값이다" .Values.resources.requests.memory | quote }}
+            limits:
+              cpu: {{ required "values.yaml의 resources.limits.cpu 는 필수값이다" .Values.resources.limits.cpu | quote }}
+              memory: {{ required "values.yaml의 resources.limits.memory 는 필수값이다" .Values.resources.limits.memory | quote }}
+          # docs/conventions/k8s.md §3 — probe 없이는 ArgoCD가 "떠 있다"와 "준비됐다"를
+          # 구분하지 못한다. timeoutSeconds는 기본값(1s)이 공유 VM에서 너무 빡빡해
+          # 재시작을 유발한 전례(wiki/argocd-bootstrap.md의 repo-server 사례)를 반영해
+          # 여유를 뒀다.
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+      volumes:
+        - name: tmp
+          emptyDir: {}

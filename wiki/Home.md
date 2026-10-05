@@ -25,8 +25,8 @@ ArgoCD·Terraform·Helm·Helmfile 네 도구를 한 저장소에서 다루는
   [드리프트와 self-heal](drift-and-selfheal.md) →
   소스 타입(Helm/Helmfile/plain manifest) → Airflow 배포
 - **Terraform·Helm·Helmfile 축** — [kind 위의 Terraform](terraform-on-kind.md),
-  [스택 경계와 폭발반경](terraform-stack-boundaries.md), Helm 차트 작성,
-  Helmfile과 Terraform의 비교
+  [스택 경계와 폭발반경](terraform-stack-boundaries.md),
+  [Helm chart 작성](writing-a-helm-chart.md), Helmfile과 Terraform의 비교
 - **교차 축** — 네 도구의 소유권 경계가 어디서 겹치고 갈리는지
 
 노트가 생기면 이 페이지와 [`_Sidebar`](_Sidebar.md)가 함께 갱신된다 —

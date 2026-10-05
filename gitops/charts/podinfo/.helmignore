@@ -1,0 +1,20 @@
+# helm package/lint 시 chart 아카이브에 넣지 않을 패턴 (helm create 기본 템플릿과 동일).
+.DS_Store
+.git/
+.gitignore
+.bzr/
+.hg/
+.hgignore
+.svn/
+*.swp
+*.bak
+*.tmp
+*.orig
+*~
+# IDE 관련 디렉터리
+.project
+.idea/
+*.tmproj
+.vscode/
+# 이 chart 전용 테스트 스크립트 — 패키징 대상이 아니다(helm template/lint엔 불필요).
+tests/

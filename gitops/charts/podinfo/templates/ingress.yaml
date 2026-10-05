@@ -1,0 +1,24 @@
+# 🔴 ingressClassName을 반드시 명시한다 — terraform/platform의 ingress-nginx는
+# watchIngressWithoutClass를 의도적으로 껐다(설계 스펙 D3 계열 결정). 이 필드를
+# 빠뜨리면 에러 없이 조용히 Ingress가 무시된다(ADDRESS가 영원히 비어 있다) —
+# required로 빈 값 렌더를 막는다(gitops/manifests/podinfo/ingress.yaml과 동일한
+# 함정을 chart에서도 그대로 막는다).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: podinfo
+  labels:
+    {{- include "podinfo.labels" . | nindent 4 }}
+spec:
+  ingressClassName: {{ required "values.yaml의 ingress.className 은 필수값이다 - 비우면 ingress-nginx가 조용히 무시한다" .Values.ingress.className }}
+  rules:
+    - host: {{ required "values.yaml의 ingress.host 는 필수값이다" .Values.ingress.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: podinfo
+                port:
+                  name: http
