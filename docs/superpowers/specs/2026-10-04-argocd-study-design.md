@@ -361,6 +361,18 @@ plain manifest / Helm chart / Kustomize base를 공식으로 전부 제공해
 > 관측하기 전에 출력을 지어내 위키에 박아두면, 되돌릴 수 없는 매체에 거짓이 남는다.
 > (dagster-study `docs/conventions/publishing.md` §4-1 계승)
 
+> 🔴 **이 절의 모든 `kubectl`·`argocd` 명령은 다음을 전제한다** (2026-10-05 정정):
+> ```bash
+> export KUBECONFIG=~/.kube/argocd-study.config
+> # 그 뒤 모든 명령에 --context kind-argocd-study 를 붙인다
+> ```
+> 🔴 **이걸 빠뜨리면 조용히 다른 클러스터를 조회한다.** 이 머신의 기본 `current-context` 는
+> `kind-lakehouse`(다른 프로젝트)이고, `kind-argocd-study` 컨텍스트는 **기본 kubeconfig 에 없다**
+> (실측: `kubectl config get-contexts kind-argocd-study` → `context does not exist`).
+> `--context` 만 붙이면 **그대로 실패**하고, 아무것도 안 붙이면 **lakehouse 를 조회해
+> "No resources found" 를 배포 실패로 오독**하게 된다 — `terraform/platform/provider.tf` 가
+> `config_context` 고정으로 막는 바로 그 사고를, 이 문서가 어기고 있었다.
+
 ### Step 0 — Terraform으로 바닥 세우기 `(1)(2)`
 
 | 스택 | 만드는 것 |
@@ -372,6 +384,7 @@ plain manifest / Helm chart / Kustomize base를 공식으로 전부 제공해
 ```
 terraform -chdir=terraform/cluster/kind plan    # 통과: No changes
 terraform -chdir=terraform/platform  plan       # 통과: No changes
+export KUBECONFIG=~/.kube/argocd-study.config
 kubectl --context kind-argocd-study get pods -n argocd           # 전부 Running
 kubectl --context kind-argocd-study get ingress -A               # argocd-server Ingress 에 ADDRESS 할당
 curl -sS -o /dev/null -w '%{http_code}\n' http://argocd.localtest.me:8081   # 200
