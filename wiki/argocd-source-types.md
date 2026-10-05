@@ -2,9 +2,13 @@
 
 Phase 2 Task 2의 기록이다. podinfo Application의 `source.path`를
 `gitops/manifests/podinfo`(plain manifest, directory 타입)에서
-`gitops/charts/podinfo`(Task 1이 쓴 Helm chart) + `source.helm: {}`로 바꾸고,
-**그 전환이 돌고 있는 파드를 재생성하는지** 실측했다. 질문은 하나였다 — ArgoCD는
-"생성 수단"이 아니라 "결과 매니페스트"를 본다는데, 그 말이 실제로 그런가.
+`gitops/charts/podinfo`(Task 1이 쓴 Helm chart)로 바꾸고, **그 전환이 돌고 있는
+파드를 재생성하는지** 실측했다. 질문은 하나였다 — ArgoCD는 "생성 수단"이 아니라
+"결과 매니페스트"를 본다는데, 그 말이 실제로 그런가.
+
+(최초 커밋에는 `source.helm: {}`도 같이 넣었다가, 그게 영구 `OutOfSync` 드리프트를
+만드는 것을 fix round 1에서 발견해 제거했다 — 아래 "빈 맵/빈 블록이 만드는 영구
+드리프트" 절.)
 
 ## 세 소스 타입이 매니페스트를 만드는 방법
 
@@ -155,6 +159,116 @@ $ curl -sS -o /dev/null -w '%{http_code}\n' http://podinfo.localtest.me:8081
   **불변 필드**에 차이가 생기면 Kubernetes 레벨에서 교체가 강제된다. "소스
   타입을 바꿔도 안전하다"는 결론은 이 불변 필드 축을 건드리지 않는 한에서만
   성립하고, 그 보장은 ArgoCD가 아니라 **chart를 쓰는 사람의 책임**이다.
+
+## 빈 맵/빈 블록이 만드는 영구 드리프트 (fix round 1)
+
+Task 2가 처음 커밋한 `gitops/apps/podinfo.yaml`은 이렇게 썼다:
+
+```yaml
+    path: gitops/charts/podinfo
+    helm: {}
+```
+
+ArgoCD는 `Chart.yaml`만으로 Helm 소스를 자동 판별하니 `helm:` 블록은 애초에
+불필요했다 — 그런데 "불필요하다"가 "무해하다"는 아니었다.
+
+### 증상 — sync는 매번 성공하는데 상태는 계속 OutOfSync
+
+```
+$ argocd app get root
+Sync Status:        OutOfSync from main (2c634a2)
+GROUP        KIND         NAME     STATUS     HEALTH
+argoproj.io  Application  argocd   podinfo    OutOfSync
+```
+
+```
+$ kubectl get events -n argocd --field-selector involvedObject.name=root --sort-by=.lastTimestamp
+13m   Normal   ResourceUpdated      application/root   Updated sync status: Synced -> OutOfSync
+10m   Normal   OperationStarted     application/root   Initiated automated sync to '2c634a2...'
+10m   Normal   OperationCompleted   application/root   Partial sync operation to 2c634a2... succeeded
+10m   Normal   ResourceUpdated      application/root   Updated sync status: OutOfSync -> Synced
+10m   Normal   ResourceUpdated      application/root   Updated sync status: Synced -> OutOfSync
+5m30s Normal   OperationStarted     application/root   Initiated automated sync to '2c634a2...'
+5m30s Normal   OperationCompleted   application/root   Partial sync operation to 2c634a2... succeeded
+5m30s Normal   ResourceUpdated      application/root   Updated sync status: OutOfSync -> Synced
+5m30s Normal   ResourceUpdated      application/root   Updated sync status: Synced -> OutOfSync
+30s   Normal   OperationStarted     application/root   Initiated automated sync to '2c634a2...'
+30s   Normal   OperationCompleted   application/root   Partial sync operation to 2c634a2... succeeded
+29s   Normal   ResourceUpdated      application/root   Updated sync status: OutOfSync -> Synced
+29s   Normal   ResourceUpdated      application/root   Updated sync status: Synced -> OutOfSync
+```
+
+**`OperationCompleted ... succeeded`가 찍히고 바로 다음 줄에서 `Synced ->
+OutOfSync`로 되돌아가는 패턴이 ArgoCD의 기본 재조정 주기(약 3분)마다 무한
+반복됐다.** `selfHeal: true`가 켜져 있어 매번 "무의미한 sync"를 자동으로
+재시도한다 — CPU를 태우고 이벤트 로그를 계속 채우지만 실제로는 아무 것도
+바뀌지 않는다.
+
+### 판정 — 어느 필드인지 특정
+
+```
+$ argocd app diff root
+===== argoproj.io/Application argocd/podinfo ======
+130a131
+>     helm: {}
+```
+
+`argocd app diff`가 즉시 범인을 지목했다: **live(클러스터)에는 `spec.source.helm`
+필드 자체가 없는데, Git에는 `helm: {}`가 있다.**
+
+### 원인 — 빈 맵은 Kubernetes API 서버가 저장하지 않는다
+
+`source.helm`의 타입은 구조체 포인터(optional object)다. 빈 객체 `{}`를
+`kubectl apply`(ArgoCD 내부적으로도 동일한 경로)로 보내면, API 서버는 그 필드에
+의미 있는 내용이 없다고 보고 **저장하지 않는다** — `omitempty` 계열 처리로
+사라진다. 그래서:
+
+- **Git(desired)** = `helm: {}` 있음
+- **Live(실제 etcd에 저장된 값)** = `helm` 필드 없음
+- 매 reconcile마다 ArgoCD가 "Git에 있는데 live에 없다"로 diff를 보고 →
+  sync를 건다 → `kubectl apply`가 다시 빈 맵을 보내고 → API 서버가 다시
+  저장을 거부 → **처음부터 반복.**
+
+sync operation 자체는 매번 "성공"으로 끝난다(apply 호출은 에러 없이 끝나니까)
+— 그런데 그 apply가 **아무 것도 바꾸지 못했기** 때문에 다음 비교 때 똑같은
+diff가 또 나온다. "sync Succeeded"와 "실제로 수렴했다"가 다른 말이라는
+뜻이다.
+
+### 해결
+
+`helm: {}` 자체를 지웠다(`f37112b`). ArgoCD가 `Chart.yaml` 존재로 Helm 소스를
+자동 판별하므로 빈 블록을 둘 이유가 없었다.
+
+```
+# 수정 후
+$ argocd app diff root
+(빈 출력, exit=0)
+
+$ kubectl get events -n argocd --field-selector involvedObject.name=root --sort-by=.lastTimestamp | tail -3
+Normal   ResourceUpdated   application/root   Updated sync status: OutOfSync -> Synced
+(이후 재이탈 없음 — 4분 이상 Synced 유지 확인)
+```
+
+### 일반화 — 언제 또 이 일이 난다
+
+Git에 **값이 있는데 API 서버가 저장하지 않는 필드**를 적으면 항상 이 패턴이
+난다. 후보:
+
+- **빈 맵/빈 리스트** (`helm: {}`, `annotations: {}`, `tags: []`) — 이번 사례.
+  `omitempty`가 있는 optional 구조체 필드는 내용이 없으면 저장 자체가 안 된다.
+- **서버가 기본값으로 채우는(defaulting) 필드를 명시적으로 적되, 그 값이
+  "비어있음과 동치"로 취급되는 경우** — 예를 들어 어떤 admission
+  webhook/CRD는 빈 문자열·0·false를 "미설정"과 같은 것으로 보고 저장하지
+  않을 수 있다(이 저장소에서 직접 재현하지는 않았다 — 일반화로만 적는다).
+- **진단 신호**: `argocd app diff`에서 **매번 같은 한 줄만** 차이로 뜨고,
+  `argocd app get`의 `Sync Status`가 `Synced`로 떨어졌다가 곧바로
+  `OutOfSync`로 되돌아가길 반복하며, sync operation 기록은 계속
+  `Succeeded`다. "초록불(Succeeded)인데 안심할 수 없다"는 점에서 이 저장소의
+  다른 노트들이 적어 온 **침묵 실패(조용히 적용 안 됨)와 정반대 방향** — 이건
+  **시끄럽게 영원히 안 끝나는** 실패다.
+- **예방**: ArgoCD가 자동 판별 가능한 필드(Helm/Kustomize 여부 등)는 명시적
+  빈 블록을 아예 쓰지 않는다. 오버라이드가 필요할 때만, 실제 값이 있을 때만
+  그 블록을 쓴다.
 
 ## 남은 우려
 
