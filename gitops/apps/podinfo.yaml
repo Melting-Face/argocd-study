@@ -22,10 +22,10 @@ spec:
     # §3-1 소유권 경계: Terraform은 클러스터 "안"의 어떤 것도 소유하지 않는다.
     namespace: podinfo
   syncPolicy:
-    # 🧪 Task 8 실험 4 — prune: false 를 명시한다. 매니페스트에서 리소스를
-    # 지워도 클러스터에는 고아로 남는지 관측한다(wiki/drift-and-selfheal.md).
+    # 🧪 Task 8 실험 4 (재관측) — prune: true 로 전환. 고아로 남아 있던 ingress 가
+    # 지워지는지 관측한다(wiki/drift-and-selfheal.md).
     automated:
       selfHeal: true
-      prune: false
+      prune: true
     syncOptions:
       - CreateNamespace=true
