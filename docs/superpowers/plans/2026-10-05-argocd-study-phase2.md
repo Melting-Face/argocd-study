@@ -226,10 +226,25 @@ grep -c 'kind: Deployment\|kind: StatefulSet\|kind: Job' /tmp/af-rendered.yaml
 - [ ] **Step 5: `docs/airflow-secret.md` 작성 — Secret 수동 생성 절차**
 
 ```bash
+export KUBECONFIG=~/.kube/argocd-study.config
 kubectl --context kind-argocd-study create namespace airflow --dry-run=client -o yaml | kubectl apply -f -
 kubectl --context kind-argocd-study -n airflow create secret generic airflow-webserver-secret \
+  --from-literal=api-secret-key="$(python3 -c 'import secrets;print(secrets.token_hex(16))')" \
   --from-literal=webserver-secret-key="$(python3 -c 'import secrets;print(secrets.token_hex(16))')"
 ```
+🔴 **정정 (2026-10-06, T3 구현자가 발견)** — 데이터 키가 **`api-secret-key`** 다.
+차트 템플릿이 `semverCompare` 로 갈라서, Airflow 3 에서는
+`webserver-secret-key-secret.yaml`(`<3.0.0` 게이트)이 아니라
+`api-secret-key-secret.yaml`(`>=3.0.0` + `apiServer.enabled`)이 유효하다.
+실측: 기본 렌더에 `AIRFLOW__WEBSERVER__SECRET_KEY` **0건**, API secret key 계열 **39건**.
+`api-secret-key` 가 없으면 apiServer·scheduler·dagProcessor·triggerer 가
+`CreateContainerConfigError` 로 멈춘다.
+
+🔑 **그리고 대안이 있었다** — 게이트가 `(not .Values.apiSecretKeySecretName)` 이므로
+**이름을 주지 않으면 차트가 Secret 을 스스로 만든다.** 그것도 값이 Git 에 들어가지 않아
+§2-2 의 요구를 똑같이 만족하면서 **수동 단계가 없다.**
+수동을 택한 이유(Secret 의 출처를 아는 것이 이 축의 학습 내용, T7 이 그 대가를 잰다)를
+**위키에 적는다** — 더 나은 선택지를 몰랐던 것이 아니라 알고 택했음이 보여야 한다.
 🔴 **왜 Git에 안 넣는지**(§2-2 범위 밖 결정: SOPS/Sealed/External Secrets는 축 하나)와 **그 대가**(수동 단계라 "전체 파괴 후 복원"이 완전 자동이 아니게 된다)를 함께 적어라. 이건 Phase 1의 "수동 개입 0회" 성과에 **구멍을 내는 것**이고, 정직하게 기록해야 한다.
 
 - [ ] **Step 6: 커밋**
