@@ -7,22 +7,6 @@
       "skillPath": "skills/brainstorming/SKILL.md",
       "computedHash": "b95dc657c5dd79caf7340ee6dead6faf2ce2d1cc613352a027fa8993966b41b7"
     },
-    "documentation": {
-      "source": "./local:dagster-study",
-      "sourceType": "local",
-      "skillPath": ".agents/skills/documentation/SKILL.md",
-      "computedHash": "1d469418f786a05be83d2a05f04d68788aeed584d13863a650f5ad73c6c4cf50",
-      "originalSource": "anthropics/knowledge-work-plugins",
-      "originalSkillPath": "engineering/skills/documentation/SKILL.md"
-    },
-    "git-commit": {
-      "source": "./local:dagster-study",
-      "sourceType": "local",
-      "skillPath": ".agents/skills/git-commit/SKILL.md",
-      "computedHash": "554d1a3c6d95f15bc1170160659ecdc9a9958b64f377f3988941b672c249b13f",
-      "originalSource": "github/awesome-copilot",
-      "originalSkillPath": "skills/git-commit/SKILL.md"
-    },
     "grill-me": {
       "source": "mattpocock/skills",
       "sourceType": "github",
@@ -35,42 +19,11 @@
       "skillPath": "skills/productivity/grilling/SKILL.md",
       "computedHash": "4dd886b0196bf43729d954ae326016f2bd9f5f79d892500b407c33a753362f14"
     },
-    "kubernetes-specialist": {
-      "source": "./local:dagster-study",
-      "sourceType": "local",
-      "skillPath": ".agents/skills/kubernetes-specialist/SKILL.md",
-      "computedHash": "f84cb51c86968d3936194f9afe4cadd83ff08f98407fb93749ece28602c9a10f",
-      "originalSource": "jeffallan/claude-skills",
-      "originalSkillPath": "skills/kubernetes-specialist/SKILL.md",
-      "localModifications": [
-        {
-          "path": "references/configuration.md",
-          "reason": "detect-private-key(PEM 머리말 문자열 일치)·gitleaks(generic-api-key, 고엔트로피 placeholder) 훅과 충돌해 예시 비밀값 4곳을 의미 보존 플레이스홀더로 치환. 값은 원본에서도 자리표시자였다 — allowlist로 뚫지 않고 콘텐츠를 고쳤다(Task 3 보고서 §우려 1 참고)",
-          "computedHash": "b82791c48b8f694ab865831291bb5cd6654f6e3eaf2fc092598d465549c4ddfa"
-        }
-      ]
-    },
     "subagent-driven-development": {
       "source": "obra/superpowers",
       "sourceType": "github",
       "skillPath": "skills/subagent-driven-development/SKILL.md",
       "computedHash": "8dde5589ee083fb4999106d116f01c8fdaf3116a8a9813fdedeb80329de49046"
-    },
-    "terraform-style-guide": {
-      "source": "./local:dagster-study",
-      "sourceType": "local",
-      "skillPath": ".agents/skills/terraform-style-guide/SKILL.md",
-      "computedHash": "3a5c2e06a1daa07600d03f48328d1479284e7a9d59d66b2663693ca972080e22",
-      "originalSource": "hashicorp/agent-skills",
-      "originalSkillPath": "plugins/terraform/skills/terraform-style-guide/SKILL.md"
-    },
-    "terraform-test": {
-      "source": "./local:dagster-study",
-      "sourceType": "local",
-      "skillPath": ".agents/skills/terraform-test/SKILL.md",
-      "computedHash": "bba613c50727af9a8e47e690b0e16a4093f0239afec495016e016b5152c9a598",
-      "originalSource": "hashicorp/agent-skills",
-      "originalSkillPath": "plugins/terraform/skills/terraform-test/SKILL.md"
     },
     "writing-plans": {
       "source": "obra/superpowers",

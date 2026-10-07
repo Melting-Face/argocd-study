@@ -46,25 +46,26 @@ ArgoCD·Terraform·Helm·Helmfile을 한 저장소에서 다루며 GitOps를 체
 ## 스킬 구성 — 5종
 
 `.agents/skills/`에 원본을 두고 `.claude/skills/<name>`이 심링크한다(기존 `brainstorming`·
-`writing-plans`·`subagent-driven-development`와 같은 구조). 출처·해시는
-[`skills-lock.json`](skills-lock.json)이 정본이다.
+`writing-plans`·`subagent-driven-development`와 같은 구조). **이 5종은 저장소에 vendored된
+파일 자체가 정본**이고 [`skills-lock.json`](skills-lock.json)에 기록하지 않는다 —
+lock은 `skills` CLI로 GitHub에서 설치한 스킬만 추적한다. 원 출처는 아래 표가 기록한다.
 
-| 스킬 | 쓰는 에이전트 | 용도 |
-| --- | --- | --- |
-| `kubernetes-specialist` | `devops-engineer`·`devops-verifier` | manifest·RBAC·네트워킹·GitOps 참고 |
-| `terraform-style-guide` | `devops-engineer` | HCL 네이밍·구조 관례 |
-| `terraform-test` | `devops-engineer` | `.tftest.hcl` 작성 |
-| `git-commit` | 전원(사용자 승인 하에) | Conventional Commits 메시지 작성 보조 |
-| `documentation` | `tech-writer` | 위키 노트·문서 구조화 |
+| 스킬 | 쓰는 에이전트 | 용도 | 원 출처(`originalSource` · 경로) |
+| --- | --- | --- | --- |
+| `kubernetes-specialist` | `devops-engineer`·`devops-verifier` | manifest·RBAC·네트워킹·GitOps 참고 | `jeffallan/claude-skills` · `skills/kubernetes-specialist/SKILL.md` |
+| `terraform-style-guide` | `devops-engineer` | HCL 네이밍·구조 관례 | `hashicorp/agent-skills` · `plugins/terraform/skills/terraform-style-guide/SKILL.md` |
+| `terraform-test` | `devops-engineer` | `.tftest.hcl` 작성 | `hashicorp/agent-skills` · `plugins/terraform/skills/terraform-test/SKILL.md` |
+| `git-commit` | 전원(사용자 승인 하에) | Conventional Commits 메시지 작성 보조 | `github/awesome-copilot` · `skills/git-commit/SKILL.md` |
+| `documentation` | `tech-writer` | 위키 노트·문서 구조화 | `anthropics/knowledge-work-plugins` · `engineering/skills/documentation/SKILL.md` |
 
 🔴 이 5종은 `../dagster-study`가 **외부 GitHub 저장소에서 가져온 것을 다시 로컬 복사**한
-것이다(`skills-lock.json`의 `source: "local:dagster-study"` + `originalSource` 필드가 원래
-출처를 함께 적는다). `kubernetes-specialist`의 `references/configuration.md`는
-`detect-private-key`·`gitleaks` 훅과 충돌하는 예시 비밀값(PEM 머리말·고엔트로피
-placeholder) 4곳을 의미 보존 플레이스홀더로 바꿨다 — **`computedHash`는 `SKILL.md`만
-해시하므로 이 변경은 그 범위 밖이다.** 그래서 `skills-lock.json`의 해당 항목에
-`localModifications`(바뀐 파일·사유·그 파일 자체의 해시)를 **기계가 읽을 수 있는 레코드로**
-남겼다 — 이 문단(산문)만 보고 끝내지 않는다.
+것이다. 과거에는 `skills-lock.json`에 `source: "local:dagster-study"`로 기록했으나, `skills`
+CLI가 이를 **존재하지 않는 로컬 경로**(`./local:dagster-study`)로 해석해 lock에서 뺐다 —
+따라서 **업스트림 갱신은 자동으로 따라오지 않는다**(필요하면 원 출처에서 수동으로 다시
+가져온다). `kubernetes-specialist`의 `references/configuration.md`는 `detect-private-key`·
+`gitleaks` 훅과 충돌하는 예시 비밀값(PEM 머리말·고엔트로피 placeholder) 4곳을 의미 보존
+플레이스홀더로 바꿨다(값은 원본에서도 자리표시자였다 — allowlist로 뚫지 않고 콘텐츠를
+고쳤다). 원본에서 다시 가져올 때 이 변경을 덮어쓰지 않도록 주의한다.
 
 ## 권한과 비가역 작업
 
