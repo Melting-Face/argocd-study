@@ -9,8 +9,9 @@
 
 이 문서는 **있는 것만** 적는다. `../dagster-study`에는 supervisor → worker 2계층, 저널
 (기록관), 워커 경계 가드, 연구 게이트, plan 미러 같은 **에이전트 오케스트레이션 체계**가
-있었다. 이 저장소에는 **그 체계가 없다** — 서브에이전트 4종과 스킬 5종만 있고, 호출·승인은
-사용자(또는 메인 세션)가 직접 한다. 없는 체계를 전제한 설명을 옮기지 않는다.
+있었다. 이 저장소에는 **그 체계가 없다** — 서브에이전트 4종과 스킬 10종(로컬 이식 5·CLI
+설치 5)만 있고, 호출·승인은 사용자(또는 메인 세션)가 직접 한다. 없는 체계를 전제한 설명을
+옮기지 않는다.
 
 ## 프로젝트 목적
 
@@ -43,12 +44,22 @@ ArgoCD·Terraform·Helm·Helmfile을 한 저장소에서 다루며 GitOps를 체
 호출·배정·승인은 **사용자 또는 메인 세션이 직접** 한다 — supervisor 역할을 대신하는
 서브에이전트는 없다.
 
-## 스킬 구성 — 5종
+## 스킬 구성 — 로컬 이식 5종 + CLI 설치 5종
 
-`.agents/skills/`에 원본을 두고 `.claude/skills/<name>`이 심링크한다(기존 `brainstorming`·
-`writing-plans`·`subagent-driven-development`와 같은 구조). **이 5종은 저장소에 vendored된
-파일 자체가 정본**이고 [`skills-lock.json`](skills-lock.json)에 기록하지 않는다 —
-lock은 `skills` CLI로 GitHub에서 설치한 스킬만 추적한다. 원 출처는 아래 표가 기록한다.
+모든 스킬은 `.agents/skills/`에 원본을 두고 `.claude/skills/<name>`이 심링크한다. 차이는
+**누가 버전을 관리하느냐**다.
+
+| 구분 | 스킬 | 정본 | 갱신 |
+| --- | --- | --- | --- |
+| 로컬 이식 | `kubernetes-specialist`·`terraform-style-guide`·`terraform-test`·`git-commit`·`documentation` | 저장소에 vendored된 파일 자체 | 수동(원 출처에서 다시 가져온다) |
+| CLI 설치 | `brainstorming`·`writing-plans`·`subagent-driven-development`(`obra/superpowers`), `grill-me`·`grilling`(`mattpocock/skills`) | [`skills-lock.json`](skills-lock.json)의 `source`·`computedHash` | `npx skills update` |
+
+🔴 `npx skills check`도 **확인에 그치지 않고 업데이트를 수행한다**(관측: 2026-10-07, 실행 결과
+`✓ Updated 2 skill(s)` 후 작업 트리 변경) — 조회 목적이면 `npx skills list`를 쓴다.
+
+### 로컬 이식 5종
+
+lock에 기록하지 않으므로 원 출처는 아래 표가 기록한다.
 
 | 스킬 | 쓰는 에이전트 | 용도 | 원 출처(`originalSource` · 경로) |
 | --- | --- | --- | --- |
