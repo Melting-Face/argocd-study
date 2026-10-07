@@ -76,25 +76,25 @@ helm 릴리스: ingress-nginx(4.15.1) · argo-cd(10.9.6) · root-app(로컬 char
 - Consumes: `gitops/manifests/podinfo/{deployment,service,ingress}.yaml` (Phase 1 산출물 — **정답지**다)
 - Produces: `gitops/charts/podinfo/` — Task 2가 Application의 `source.helm`으로 가리킨다. values 키: `image.tag`·`replicaCount`·`ingress.host`·`resources`
 
-- [ ] **Step 1: 동등성 테스트를 먼저 만든다**
+- [x] **Step 1: 동등성 테스트를 먼저 만든다**
 
 `helm template` 결과와 plain manifest가 **의미상 같은지** 비교하는 스크립트를 `gitops/charts/podinfo/tests/equivalence.sh` 로 쓴다. 두 쪽을 정규화(`yq` 또는 `kubectl --dry-run=client -o yaml`)해 diff 한다.
 🔴 **무엇을 "의미 있는 차이"로 볼지 스크립트에 명시하라** — Helm이 붙이는 `app.kubernetes.io/managed-by: Helm`·`helm.sh/chart` 레이블은 **정당한 차이**다. 그 외의 차이는 실패로 본다.
 
-- [ ] **Step 2: 테스트가 실패하는지 확인**
+- [x] **Step 2: 테스트가 실패하는지 확인**
 
 ```bash
 bash gitops/charts/podinfo/tests/equivalence.sh
 ```
 Expected: FAIL — chart가 아직 없다. 출력을 보고서에 남긴다.
 
-- [ ] **Step 3: chart 구현**
+- [x] **Step 3: chart 구현**
 
 `Chart.yaml`(`apiVersion: v2`, `type: application`, `version`·`appVersion` 고정), `values.yaml`, 템플릿 4개.
 🔴 **Phase 1이 매니페스트에 박은 값을 그대로 가져와라** — 이미지 태그 `6.15.0`, `runAsUser: 100`/`runAsGroup: 101`(비숫자 USER 때문에 `runAsNonRoot`가 검증 못 하던 문제의 해결책), requests/limits 4값, `ingressClassName: nginx`, host `podinfo.localtest.me`, containerPort 9898.
 🔴 **`_helpers.tpl`의 레이블은 Phase 1 매니페스트의 레이블과 일치시켜라** — 어긋나면 셀렉터가 깨져 Task 2에서 파드가 재생성된다(그러면 Step 3의 핵심 질문에 답할 수 없다).
 
-- [ ] **Step 4: 테스트 통과 확인**
+- [x] **Step 4: 테스트 통과 확인**
 
 ```bash
 bash gitops/charts/podinfo/tests/equivalence.sh      # 의미 있는 차이 0건
@@ -102,17 +102,17 @@ helm lint gitops/charts/podinfo --strict
 helm template podinfo gitops/charts/podinfo | head -40
 ```
 
-- [ ] **Step 5: `helm lint` 를 pre-commit 게이트로 추가**
+- [x] **Step 5: `helm lint` 를 pre-commit 게이트로 추가**
 
 spec §7-4가 계획했으나 Phase 1에서 **도입되지 않았고**, 최종 리뷰가 `AGENTS.md`에 「Helm chart 린트 게이트 — 없음」으로 기록했다. 이제 chart가 둘(`charts/root-app`, `gitops/charts/podinfo`)이니 도입한다.
 🔴 **일부러 깨뜨려 잡히는지 확인하라** — `Chart.yaml`의 필수 필드를 지워 `helm lint`가 FAIL 하는 것을 관측하고 되돌려라.
 ⚠️ Phase 1 실측: **`helm lint --strict`는 `required` 미충족을 WARN으로만 낸다**(`helm template`이라야 실패). 이 한계를 훅 주석에 적고, `AGENTS.md`의 "없음" 행을 **실제 도입 내용 + 이 한계**로 갱신하라.
 
-- [ ] **Step 6: `docs/conventions/k8s.md` 에 Helm chart 규약 추가**
+- [x] **Step 6: `docs/conventions/k8s.md` 에 Helm chart 규약 추가**
 
 이 저장소의 chart가 지킬 것: 버전 고정, `required`로 필수값 강제(초록불 함정 방지), 레이블 규약, `.helmignore`.
 
-- [ ] **Step 7: 위키 `writing-a-helm-chart.md` 작성 + 커밋**
+- [x] **Step 7: 위키 `writing-a-helm-chart.md` 작성 + 커밋**
 
 plain manifest → chart 재작성에서 **실제로 걸린 것**을 적어라. 동등성 스크립트가 무엇을 정당한 차이로 보는지, `helm lint`의 한계도.
 🔴 **클러스터를 건드리지 않는다** — 이 Task는 파일 작업뿐이다. `argocd app` 상태가 변하면 안 된다.
@@ -129,7 +129,7 @@ plain manifest → chart 재작성에서 **실제로 걸린 것**을 적어라. 
 - Consumes: Task 1의 `gitops/charts/podinfo/`
 - Produces: `source.helm`을 쓰는 podinfo Application — Phase 2 이후의 기준 상태
 
-- [ ] **Step 1: 전환 **전** 상태를 기록한다**
+- [x] **Step 1: 전환 **전** 상태를 기록한다**
 
 ```bash
 kubectl --context kind-argocd-study get pod -n podinfo \
@@ -139,12 +139,12 @@ argocd app get podinfo
 ```
 🔴 **이 출력이 비교 기준이다.** 보고서에 raw 그대로 남겨라.
 
-- [ ] **Step 2: Application 의 source 를 전환하고 커밋·푸시**
+- [x] **Step 2: Application 의 source 를 전환하고 커밋·푸시**
 
 `path: gitops/manifests/podinfo` → `path: gitops/charts/podinfo` + `helm:` 블록(values 오버라이드가 필요하면 최소한으로).
 ⚠️ `automated: {prune:true, selfHeal:true}` 가 켜져 있으므로 **푸시하면 자동으로 적용된다.** 적용 과정을 지켜봐라.
 
-- [ ] **Step 3: 🔑 파드가 재생성됐는가 — 관측**
+- [x] **Step 3: 🔑 파드가 재생성됐는가 — 관측**
 
 ```bash
 argocd app get podinfo            # Synced/Healthy 로 수렴하는가
@@ -157,13 +157,13 @@ kubectl --context kind-argocd-study get events -n podinfo --sort-by=.lastTimesta
 - **UID 가 바뀌었다** → 재생성됨. 🔴 **무엇이 달랐는지 찾아라** — `argocd app diff` 와 Task 1의 동등성 스크립트를 다시 돌려 **어느 필드가 원인인지** 특정하라. "재생성됐다"로 끝내지 말 것
 - 🔴 **어느 쪽이든 그게 답이다.** 기대한 쪽으로 쓰지 말고 관측한 쪽을 적어라
 
-- [ ] **Step 4: 접속 확인**
+- [x] **Step 4: 접속 확인**
 
 ```bash
 curl -sS -o /dev/null -w '%{http_code}\n' http://podinfo.localtest.me:8081   # 200
 ```
 
-- [ ] **Step 5: 위키 `argocd-source-types.md` 작성 + 커밋**
+- [x] **Step 5: 위키 `argocd-source-types.md` 작성 + 커밋**
 
 `directory`·`helm`·`kustomize` 소스 타입의 차이, **전환 시 무슨 일이 일어나는가**(Step 3 관측), ArgoCD가 "생성 수단"이 아니라 "결과 매니페스트"를 본다는 것의 의미와 **그 한계**(결과가 1비트라도 다르면 재생성된다).
 
@@ -178,7 +178,7 @@ curl -sS -o /dev/null -w '%{http_code}\n' http://podinfo.localtest.me:8081   # 2
 **Interfaces:**
 - Produces: `gitops/values/airflow.yaml` — Task 4의 Application이 `helm.valueFiles`로 가리킨다. Secret 이름: `airflow-webserver-secret`(키 `webserver-secret-key`)
 
-- [ ] **Step 1: 차트 사실을 먼저 실측한다**
+- [x] **Step 1: 차트 사실을 먼저 실측한다**
 
 ```bash
 helm show values apache-airflow/airflow --version 1.22.0 > /tmp/af-values.yaml
@@ -191,7 +191,7 @@ grep -n -A3 '^ingress:' /tmp/af-values.yaml
 - UI를 서빙하는 것은 **`apiServer`**(`webserver`는 레거시 블록). ingress도 **`ingress.apiServer`**
 - 기본 `enabled`: `redis=true` · `statsd=true` · `triggerer=true` · `postgresql=true` · `flower=false` · `pgbouncer=false`
 
-- [ ] **Step 2: `gitops/values/airflow.yaml` 작성**
+- [x] **Step 2: `gitops/values/airflow.yaml` 작성**
 
 - `executor: LocalExecutor`
 - 🔴 **LocalExecutor에서 불필요한 것을 끈다**: `redis.enabled: false`(기본 true — **안 끄면 쓸모없는 파드가 뜬다**), `statsd.enabled: false`. `triggerer`는 Airflow 3에서 deferrable 태스크에 쓰이므로 **끌지 말지 판단하고 이유를 적어라**
@@ -200,7 +200,7 @@ grep -n -A3 '^ingress:' /tmp/af-values.yaml
 - `webserverSecretKeySecretName: airflow-webserver-secret` — 🔴 **값을 Git에 넣지 않는다**
 - requests/limits 명시(`docs/conventions/k8s.md` §2)
 
-- [ ] **Step 3: 🔴 키가 실제로 먹는지 `helm template`으로 증명한다**
+- [x] **Step 3: 🔴 키가 실제로 먹는지 `helm template`으로 증명한다**
 
 **이게 이 Task의 핵심 게이트다.** Helm은 모르는 키를 조용히 버린다.
 ```bash
@@ -216,6 +216,10 @@ grep -n 'airflow-webserver-secret' /tmp/af-rendered.yaml              # Secret �
 
 - [ ] **Step 4: 렌더된 파드 수와 자원 요구를 계산한다**
 
+> 🟡 **미확인 (2026-10-07 진행 상태 갱신 시)** — `gitops/values/airflow.yaml` 주석은 "Step 4
+> 자원 합계에 포함했다"고 적지만 **합계 수치·계산 방법이 저장소에 기록돼 있지 않다.** Task 4
+> Step 1이 이 합계와 대조하므로, 그 전에 `helm template` 렌더로 다시 계산해 기록한다.
+
 ```bash
 grep -c 'kind: Deployment\|kind: StatefulSet\|kind: Job' /tmp/af-rendered.yaml
 ```
@@ -223,7 +227,7 @@ grep -c 'kind: Deployment\|kind: StatefulSet\|kind: Job' /tmp/af-rendered.yaml
 `yq` 든 python 이든). 합계 두 숫자와 **어떻게 셌는지**를 보고서에 적어라.
 🔴 **ArgoCD 7파드 + ingress-nginx 1 + podinfo 1 위에 얹힌다.** 합계를 보고서에 적고, R7(자원 경합) 판단 근거로 삼아라. `lakehouse` 중지가 필요하면 Task 4에서 전제로 명시하라.
 
-- [ ] **Step 5: `docs/airflow-secret.md` 작성 — Secret 수동 생성 절차**
+- [x] **Step 5: `docs/airflow-secret.md` 작성 — Secret 수동 생성 절차**
 
 ```bash
 export KUBECONFIG=~/.kube/argocd-study.config
@@ -247,7 +251,7 @@ kubectl --context kind-argocd-study -n airflow create secret generic airflow-web
 **위키에 적는다** — 더 나은 선택지를 몰랐던 것이 아니라 알고 택했음이 보여야 한다.
 🔴 **왜 Git에 안 넣는지**(§2-2 범위 밖 결정: SOPS/Sealed/External Secrets는 축 하나)와 **그 대가**(수동 단계라 "전체 파괴 후 복원"이 완전 자동이 아니게 된다)를 함께 적어라. 이건 Phase 1의 "수동 개입 0회" 성과에 **구멍을 내는 것**이고, 정직하게 기록해야 한다.
 
-- [ ] **Step 6: 커밋**
+- [x] **Step 6: 커밋**
 
 🔴 클러스터를 건드리지 않는다. 이 Task는 파일 + `helm template` 뿐이다.
 
