@@ -121,7 +121,9 @@ ArgoCD 위에서의 관측과 공식 문서 두 가지에 근거한다.
 ### 수정
 
 Airflow Helm chart 1.22.0 문서 *"Installing the Helm Chart with Argo CD, Flux, Rancher or
-Terraform"* 의 권고대로 `values.yaml` 을 고쳤다(커밋 `974fcfe`).
+Terraform"* 의 권고 중 `useHelmHooks: false` 둘과 마이그레이션 Job의 `Sync` 훅으로 `values.yaml` 을
+고쳤다(커밋 `974fcfe`). 문서가 드는 값은 모두 네 개이며 나머지 하나(`applyCustomEnv: false`)는
+아래 "세 번째 함정" 의 수정(커밋 `04b0375`)에서 더했다.
 
 ```yaml
   migrateDatabaseJob:
@@ -151,21 +153,49 @@ Terraform"* 의 권고대로 `values.yaml` 을 고쳤다(커밋 `974fcfe`).
 정규식을 고쳐야 했다. 수정 뒤 단언 1~7이 모두 PASS 였다.
 
 한 가지 남은 것: `Secret/airflow-broker-url` 의 `helm.sh/hook: pre-install` 은 chart가
-redis를 꺼도 렌더되고 끌 값이 없다. `pre-install` 은 PreSync로 매핑되어 이 교착과 무관하므로
-단언 6을 Job으로 한정했다.
+redis를 꺼도 렌더되고 끌 값이 없다. `pre-install` 은 Argo CD *"Helm Hooks"* 표에서
+PreSync로 매핑되는 훅이라 단언 6을 Job으로 한정했다. 다만 이 훅이 교착에 **관여하지
+않았다고 단정하지는 않는다.** 아래 operation을 종료한 직후에 새 operation이
+`waiting for deletion of hook /Secret/airflow-broker-url` 메시지를 냈고, 이후 self-heal
+operation의 대상 리소스에도 이 Secret이 들어 있었다. 교착에 기여했는지는 **미관측**이다.
 
 ### 두 번째 함정 — 고친 커밋이 적용되지 않았다
 
 수정 커밋을 push(12:27:18Z)했는데도 파드는 그대로였다. 앱은 `OutOfSync` / `Degraded`,
-sync operation은 `Running` 이었고 이 상태가 12:27~12:29Z에 관측됐다. 이유는 이렇다. 처음의
+sync operation은 `Running` 이었다. 20초 간격 폴링(`task-8-observations.md` "기록 보강")의
+경계 줄이다.
+
+```text
+12:27:25 rev=cb34351 Synced/Degraded op=Running
+12:27:45 rev=974fcfe OutOfSync/Degraded op=Running
+...
+12:35:27 rev=974fcfe OutOfSync/Degraded op=Running
+12:35:47 rev=974fcfe OutOfSync/Degraded op=Terminating
+```
+
+12:27:25에는 아직 옛 리비전(`cb34351`)이었고, 새 리비전을 감지한 12:27:45부터 operation을
+종료한 12:35:47 직전까지 **약 8분** 동안 `OutOfSync/Degraded`, `op=Running` 이 이어졌다.
+이유는 이렇다. 처음의
 sync operation이 **리소스가 Healthy가 되기를 기다리며 끝나지 않았다.** operation이
 진행 중이면 자동 sync는 새 커밋을 적용하지 못한다. 교착을 만든 operation이 교착을 푸는
 커밋의 적용을 막은 것이다.
 
-해결은 그 operation을 끝내는 것이었다. 사용자 승인(12:35:30Z) 아래 `argocd app terminate-op`
-을 `--core` 로 시도했으나 `configmap "argocd-cm" not found` 로 실패했고, 컨트롤러가
-`status.operationState.phase` 를 `Terminating` 으로 직접 패치했다. (이 두 사실은 컨트롤러
-세션의 보고에서 옮긴 것이다. 원장의 한 줄 기록은 "멈춘 op Terminating 패치" 까지다.)
+해결은 그 operation을 끝내는 것이었다. 사용자 승인(12:35:30Z) 아래 시도한 기록 원문이다
+(`task-8-observations.md` "기록 보강 — 컨트롤러 관측 원문").
+
+```text
+$ argocd app terminate-op airflow --kube-context kind-argocd-study --core
+{"level":"fatal","msg":"configmap \"argocd-cm\" not found","time":"2026-10-08T21:35:31+09:00"}
+$ kubectl --context kind-argocd-study -n argocd patch application airflow --type merge -p '{"status":{"operationState":{"phase":"Terminating"}}}'
+application.argoproj.io/airflow patched
+```
+
+CLI는 실패했고, `Application` 의 `status.operationState.phase` 를 `kubectl patch` 로 직접
+`Terminating` 으로 바꿨다. 10초 뒤의 상태는 다음과 같다.
+
+```text
+op=Running msg=waiting for deletion of hook /Secret/airflow-broker-url rev=974fcfefa045ec4ddf9c6621eb43fe70b016b0da
+```
 
 ### 이후 타임라인 (UTC, 원장 기록)
 
@@ -175,8 +205,33 @@ sync operation이 **리소스가 Healthy가 되기를 기다리며 끝나지 않
 | 12:40:46 | `one or more synchronization tasks completed unsuccessfully. Retrying attempt #1` |
 | 12:41:26 | `Succeeded`, `Synced` / `Healthy` |
 
+(폴링상 `Synced/Degraded` 는 12:36:07~12:38:28, `Synced/Progressing` 은 12:38:48부터다.)
 중간의 한 번의 실패는 **자동 재시도**(attempt #1)가 흡수했다. 재시도 원인 — 어느 태스크가
 왜 실패했는지 — 은 기록하지 않았다(**미관측**).
+
+### 세 번째 함정 — 12:41의 `Healthy` 는 스냅샷이었다 (커밋 `04b0375`)
+
+첫 수정은 새 문제를 만들었다. `createUserJob.useHelmHooks: false` 로 두고 ArgoCD 훅
+어노테이션도 달지 않자 `Job/airflow-create-user` 가 **추적되는 일반 리소스**가 되었다. chart
+기본값 `createUserJob.ttlSecondsAfterFinished: 300` 이 완료 5분 뒤 Job을 지우면 `Missing` →
+`OutOfSync` → selfHeal이 다시 만든다. 리뷰어가 읽기 전용으로 관측한 값이다(2026-10-08
+~12:47:52Z).
+
+- 마지막 operation: `initiatedBy.automated: true`, `autoHealAttemptsCount: 2`
+- 대상 리소스: `Job/airflow-create-user`, `Secret/airflow-broker-url`
+- 메시지: `job.batch/airflow-create-user created`, 시작 2026-10-08T12:47:10Z
+- 이벤트: create-user 파드가 ~12:41:44 와 ~12:47:10 에 생성
+
+수정(`04b0375`): `createUserJob.jobAnnotations` 에 `argocd.argoproj.io/hook: PostSync` 를
+달고, 두 Job 모두 `applyCustomEnv: false` 를 더해 문서의 네 값을 모두 맞췄다. PostSync는
+**Airflow 문서의 값이 아니라 컨트롤러의 선택**이다. 파드는 create-user를 기다리지 않으므로
+PostSync여도 교착하지 않고, 훅은 추적 대상이 아니라 TTL로 지워져도 `Missing` 이 되지 않으며,
+ArgoCD 기본 `BeforeHookCreation` 으로 sync마다 교체된다.
+
+🔴 이 수정 뒤 루프가 멈췄는지는 **아직 관측하지 않았다**(push 전이다).
+
+또 앞의 "`Sync` 훅은 sync마다 다시 돈다" 는 **전체 sync** 에 대한 말이다. 12:47의 self-heal은
+나열된 리소스만 다루는 부분 sync였고 마이그레이션 Job을 돌리지 않았다(리뷰어 관측).
 
 ### 교훈 (CLAUDE.md 원칙 7)
 
@@ -189,6 +244,8 @@ sync operation이 **리소스가 Healthy가 되기를 기다리며 끝나지 않
 
 - 이 결함은 **계획(Task 3)과 설계에 없었다.** 설계 §6의 실패 모드 표에 이 교착이 빠져
   있었고, 관측으로 드러나서야 추가되었다(원장 판정 HOOK-R1 — 설계 F11로 기록하기로 했다).
+- 12:41:26의 `Synced` / `Healthy` 도 스냅샷이었다. 그 뒤 앱은 5분 주기로 흔들리고
+  있었다(위 세 번째 함정). 한 번의 초록불로 완료를 선언하지 않는다.
 - "멈춘 operation"은 수정이 **자동으로 도착하지 않는** 상태를 만든다. 고쳤는데 안 바뀐다면
   앱 상태 옆의 operation 단계(`Running` 인지)를 먼저 본다.
 
@@ -241,12 +298,14 @@ StatefulSet/airflow-triggerer gen=1
 
 ## 아직 관측하지 않은 것
 
+- TimeoutError 첫 줄 앞부분은 `values.yaml` 주석에서 인용했고, 관측 파일에는
+  `MigrationHead(s) in DB: set()` 조각만 있다.
+- 세 번째 함정의 수정 뒤 루프가 멈췄는지.
 - 재시도(attempt #1)를 일으킨 태스크와 실패 원인.
 - 마이그레이션 `Sync` 훅이 **이후 sync마다** 실제로 재실행되는지(문서가 말하는 트레이드오프
   — 재실행을 따로 관측하지 않았다).
 - G5 비교 결과(이미지 태그 변경 이후의 `resourceVersion`·`generation`).
-- `Secret/airflow-broker-url` 의 `pre-install` 훅이 PreSync로 매핑되어 무해하다는 서술은
-  매핑표에 근거한 추론이다.
+- `Secret/airflow-broker-url` 의 `pre-install` 훅이 교착에 기여했는지.
 
 ## 출처
 
