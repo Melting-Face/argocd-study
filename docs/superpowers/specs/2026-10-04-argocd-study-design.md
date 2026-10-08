@@ -522,6 +522,9 @@ terraform -chdir=terraform/platform  apply
 | `tech-writer` | 이식 | `docs/**` + `wiki/**` 소유자 |
 | `researcher` | 이식(축소) | 외부 1차 출처 수집. DUA 질의유출 통제 절 삭제 |
 
+> 2026-10-08 축소: `devops-engineer`·`devops-verifier` 제거 —
+> [서브에이전트 효율화·축소 설계](2026-10-08-subagent-slimming-design.md) 참조. 위 표는 이식 당시 기록이다.
+
 제외: `devops-qa`, `security`(gitleaks·detect-private-key 훅과 범위 중복),
 `archivist`(저널 체계 전체가 따라와야 함), 데이터 축 5종.
 

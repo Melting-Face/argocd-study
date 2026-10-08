@@ -79,6 +79,11 @@
    관측. **사람이 본다.** 각 Step의 판정 명령은 설계 문서 §6에 있고, **인프라에 붙는 검사는
    CI에 넣지 않는다**(인프라 가용성에 커밋이 묶이면 안 된다).
 
+## 서브에이전트 운용
+
+- plan 태스크는 `실행: main | sdd`로 나눈다 — 클러스터 적용·관측은 메인 세션, 파일 작성·정적
+  검증은 SDD 구현자(fix round 2회 상한). 정본은 [`docs/conventions/agents.md`](docs/conventions/agents.md).
+
 ## 타임존 정책
 
 - 이 저장소의 로그·상태(kind·ArgoCD·Kubernetes 이벤트)는 **UTC 그대로** 둔다 — 로컬 학습

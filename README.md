@@ -75,15 +75,14 @@ Task 4~8 에서 전부 구현됐다 — 위 명령은 지금 이 저장소를 �
 | --- | --- |
 | [설계 문서](docs/superpowers/specs/2026-10-04-argocd-study-design.md) | 아키텍처·설계 결정(D1~D8)·리스크·테스트 전략 — **정본** |
 | [구현 계획](docs/superpowers/plans/2026-10-04-argocd-study-phase1.md) | Phase 1(Step 0~2) 구현 계획 |
-| [`docs/conventions/`](docs/conventions/README.md) | 코딩·운영 규칙 5종(terraform·git·k8s·general·publishing) |
+| [`docs/conventions/`](docs/conventions/README.md) | 코딩·운영 규칙 6종(terraform·git·k8s·general·publishing·agents) |
 | [`CLAUDE.md`](CLAUDE.md) | 핵심 컨벤션 요약 |
 | [`AGENTS.md`](AGENTS.md) | 서브에이전트 구성·권한·강제 수단과 그 한계 |
 | [위키](https://github.com/Melting-Face/argocd-study/wiki) | 실습 과정에서 관측한 것(Step별 노트) |
 
 ## AI 에이전트 작업 방식
 
-`.claude/agents/`에 서브에이전트 4종(`devops-engineer`·`devops-verifier`·`tech-writer`·
-`researcher`)이 있다. 각자의 역할·경계는 [`AGENTS.md`](AGENTS.md)를 본다.
+`.claude/agents/`에 서브에이전트 2종(`tech-writer`·`researcher`)이 있다. 각자의 역할·경계는 [`AGENTS.md`](AGENTS.md)를 본다.
 
 [`.claude/settings.json`](.claude/settings.json)의 `permissions.ask`에는 **되돌릴 수
 없는 명령만** 올라가 있다 — `terraform destroy`/`state rm`·`mv`·`push`, `kind delete

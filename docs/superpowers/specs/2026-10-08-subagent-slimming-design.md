@@ -147,7 +147,8 @@ SDD 스킬 기본값 위에 이 저장소가 **더 좁게** 거는 규칙이다.
 ```bash
 # S1 — 이력 문서·벤더 스킬 제외
 grep -rn "devops-engineer\|devops-verifier" --include='*.md' . \
-  | grep -v '^./docs/superpowers/plans/\|^./.agents/skills/\|^./.superpowers/\|2026-10-04-argocd-study-design.md\|2026-10-08-subagent-slimming-design.md'
+  | sed 's|^\./||' \
+  | grep -v '^docs/superpowers/plans/\|^\.agents/skills/\|^\.superpowers/\|2026-10-04-argocd-study-design.md\|2026-10-08-subagent-slimming-design.md\|^AGENTS.md:.*2026-10-08'
 # S2
 pre-commit run --all-files
 # S3 — description 글자 수
@@ -156,6 +157,8 @@ for f in .claude/agents/*.md; do sed -n 's/^description: //p' "$f" | python3 -c 
 
 S1은 출력 0줄, S2는 전 훅 Passed, S3은 각 200 이하가 통과다. 상위 설계 §7-1은 주석을 달아도
 표에 이름이 남으므로 S1 grep에서 제외한다.
+(2026-10-08 실행 시 정정: grep은 출력 경로에 `./`를 붙이지 않아 처음 쓴 `^./` 제외 패턴이
+하나도 걸리지 않았다 — `sed`로 정규화하고 `AGENTS.md`의 제거 이력 주석 행을 제외 대상에 넣었다.)
 
 ### 5-2. 다음 plan 실행 뒤 (S4)
 

@@ -9,7 +9,7 @@
 
 이 문서는 **있는 것만** 적는다. `../dagster-study`에는 supervisor → worker 2계층, 저널
 (기록관), 워커 경계 가드, 연구 게이트, plan 미러 같은 **에이전트 오케스트레이션 체계**가
-있었다. 이 저장소에는 **그 체계가 없다** — 서브에이전트 4종과 스킬 10종(로컬 이식 5·CLI
+있었다. 이 저장소에는 **그 체계가 없다** — 서브에이전트 2종과 스킬 10종(로컬 이식 5·CLI
 설치 5)만 있고, 호출·승인은 사용자(또는 메인 세션)가 직접 한다. 없는 체계를 전제한 설명을
 옮기지 않는다.
 
@@ -28,7 +28,7 @@ ArgoCD·Terraform·Helm·Helmfile을 한 저장소에서 다루며 GitOps를 체
 - 비용·자원(이 저장소는 로컬 클러스터라 주로 **호스트 자원 경합**이 비용이다, 설계 R7)
 - 관측 가능성(판정 명령이 있는가 — 없으면 Step 완료를 주장하지 않는다)
 
-## 에이전트 구성 — 서브에이전트 4종
+## 에이전트 구성 — 서브에이전트 2종
 
 `.claude/agents/`에 있다. 전부 `../dagster-study`에서 **선별 이식하며 변형**했다
 (원본 12종 중 4종, 설계 §7-1). 데이터 축 워커(`data-engineer`·`analyst`·`archivist` 등)와
@@ -36,10 +36,13 @@ ArgoCD·Terraform·Helm·Helmfile을 한 저장소에서 다루며 GitOps를 체
 
 | 에이전트 | 역할 | 쓰기 권한 |
 | --- | --- | --- |
-| `devops-engineer` | Terraform·Helm·Helmfile·ArgoCD Application 작성 | `terraform/**`·`gitops/**`·`helmfile.yaml` |
-| `devops-verifier` | `argocd app get`의 Sync/Health를 선언과 대조(읽기 전용) | 없음 |
 | `tech-writer` | `docs/**`·`README.md`·`wiki/**` 소유 | 문서만 |
 | `researcher` | 외부 1차 출처 조사(읽기 전용) | 없음 |
+
+2026-10-08 `devops-engineer`·`devops-verifier`를 제거했다 — 사용 0회였다
+([서브에이전트 효율화·축소 설계](docs/superpowers/specs/2026-10-08-subagent-slimming-design.md)).
+인프라 파일 작성은 SDD 구현자, 적용·관측은 메인 세션(`main` 태스크)이 맡는다 — 규칙 정본은
+[`docs/conventions/agents.md`](docs/conventions/agents.md).
 
 호출·배정·승인은 **사용자 또는 메인 세션이 직접** 한다 — supervisor 역할을 대신하는
 서브에이전트는 없다.
@@ -63,9 +66,9 @@ lock에 기록하지 않으므로 원 출처는 아래 표가 기록한다.
 
 | 스킬 | 쓰는 에이전트 | 용도 | 원 출처(`originalSource` · 경로) |
 | --- | --- | --- | --- |
-| `kubernetes-specialist` | `devops-engineer`·`devops-verifier` | manifest·RBAC·네트워킹·GitOps 참고 | `jeffallan/claude-skills` · `skills/kubernetes-specialist/SKILL.md` |
-| `terraform-style-guide` | `devops-engineer` | HCL 네이밍·구조 관례 | `hashicorp/agent-skills` · `plugins/terraform/skills/terraform-style-guide/SKILL.md` |
-| `terraform-test` | `devops-engineer` | `.tftest.hcl` 작성 | `hashicorp/agent-skills` · `plugins/terraform/skills/terraform-test/SKILL.md` |
+| `kubernetes-specialist` | 메인 세션·SDD 구현자 | manifest·RBAC·네트워킹·GitOps 참고 | `jeffallan/claude-skills` · `skills/kubernetes-specialist/SKILL.md` |
+| `terraform-style-guide` | 메인 세션·SDD 구현자 | HCL 네이밍·구조 관례 | `hashicorp/agent-skills` · `plugins/terraform/skills/terraform-style-guide/SKILL.md` |
+| `terraform-test` | 메인 세션·SDD 구현자 | `.tftest.hcl` 작성 | `hashicorp/agent-skills` · `plugins/terraform/skills/terraform-test/SKILL.md` |
 | `git-commit` | 전원(사용자 승인 하에) | Conventional Commits 메시지 작성 보조 | `github/awesome-copilot` · `skills/git-commit/SKILL.md` |
 | `documentation` | `tech-writer` | 위키 노트·문서 구조화 | `anthropics/knowledge-work-plugins` · `engineering/skills/documentation/SKILL.md` |
 
