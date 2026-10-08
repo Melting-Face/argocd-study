@@ -31,7 +31,7 @@ ArgoCD·Terraform·Helm·Helmfile을 한 저장소에서 다루며 GitOps를 체
 ## 에이전트 구성 — 서브에이전트 2종
 
 `.claude/agents/`에 있다. 전부 `../dagster-study`에서 **선별 이식하며 변형**했다
-(원본 12종 중 4종, 설계 §7-1). 데이터 축 워커(`data-engineer`·`analyst`·`archivist` 등)와
+(이식 당시 원본 12종 중 4종, 현재 2종 — 설계 §7-1). 데이터 축 워커(`data-engineer`·`analyst`·`archivist` 등)와
 `security`·`devops-qa`는 이 저장소에 대상이 없거나 저널 체계가 전제돼 제외했다.
 
 | 에이전트 | 역할 | 쓰기 권한 |

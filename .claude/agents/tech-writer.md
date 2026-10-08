@@ -19,7 +19,7 @@ model: inherit
 
 **쓸 수 있는 곳** — `docs/**` · 최상위 `README.md` · `wiki/**`.
 
-**남의 소관** — `terraform/**`·`gitops/**`·`helmfile.yaml`은 메인 세션,
+**남의 소관** — `terraform/**`·`gitops/**`·`helmfile.yaml`은 메인 세션·SDD 구현자,
 `.claude/**`·`CLAUDE.md`·`AGENTS.md`·`skills-lock.json`은 사용자 직접 관리(이 저장소는
 supervisor가 따로 없다). 원문 수정이 필요하면 **어느 파일 무엇을 어떻게**를 반환한다.
 
