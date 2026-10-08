@@ -142,6 +142,13 @@ repos:
   # "helm lint가 통과했다"를 "chart가 올바르다"로 읽지 않는다(이 저장소 규율).
   # 값 수준 검증은 gitops/charts/podinfo/tests/equivalence.sh(내부에서 helm
   # template을 호출한다)와 Task 2의 실제 배포 관측이 메운다.
+  #
+  # gitops/charts/airflow 는 공식 chart 를 dependency 로 감싼 umbrella 라서 lint 전에
+  # `helm dependency build` 가 필요하다(없으면 "missing in charts/ directory" 로 깨진다).
+  # 산출물 charts/*.tgz 는 .gitignore 대상이고 Chart.lock 이 버전을 고정한다. 이 훅은
+  # 의존 chart 를 https://airflow.apache.org 에서 내려받으므로 네트워크가 필요하다(CI 포함).
+  # 따라서 이 훅은 레지스트리 가용성에 묶인다 — terraform_validate 를 훅에서 뺀 이유와 같은
+  # 한계지만, 여기서는 lint 가 의존 chart 없이는 성립하지 않아 감수한다.
   - repo: local
     hooks:
       - id: helm-lint
@@ -149,10 +156,12 @@ repos:
         language: system
         entry: >-
           bash -c 'set -e;
-          for d in terraform/platform/charts/root-app gitops/charts/podinfo; do
+          for d in terraform/platform/charts/root-app gitops/charts/podinfo gitops/charts/airflow; do
+          if grep -q "^dependencies:" "$d/Chart.yaml"; then
+          echo "--- helm dependency build $d ---"; helm dependency build "$d"; fi;
           echo "--- helm lint --strict $d ---"; helm lint --strict "$d"; done'
         pass_filenames: false
-        files: '^(terraform/platform/charts/root-app|gitops/charts/podinfo)/'
+        files: '^(terraform/platform/charts/root-app|gitops/charts/podinfo|gitops/charts/airflow)/'
 
   # Python 린트 + 포맷 (규칙은 pyproject.toml [tool.ruff], Task 2 에서 scripts/*.py 와 함께 추가)
   - repo: https://github.com/astral-sh/ruff-pre-commit

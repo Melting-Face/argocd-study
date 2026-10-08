@@ -1,0 +1,10 @@
+apiVersion: v2
+name: airflow
+description: 공식 Apache Airflow chart 를 dependency 로 감싼 umbrella chart (이미지·Secret 참조만 덧씌운다)
+icon: https://airflow.apache.org/images/airflow_dark_bg.png
+type: application
+version: 0.1.0
+dependencies:
+  - name: airflow
+    version: 1.22.0
+    repository: https://airflow.apache.org

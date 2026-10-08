@@ -16,3 +16,6 @@ __pycache__/
 
 # 로컬
 .DS_Store
+
+# helm dependency build 산출물 (Chart.lock 이 버전을 고정한다)
+gitops/charts/*/charts/
