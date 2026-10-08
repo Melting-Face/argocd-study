@@ -185,6 +185,17 @@ repos:
         files: '(\.md$|^scripts/doc_lint\.py$)'
         stages: [pre-commit]
 
+      # 서브에이전트 사용량 집계 스크립트 테스트(fixture 전용 — ~/.claude 를 읽지 않아
+      # 개인 환경·인프라에 묶이지 않는다). 규칙 정본은 docs/conventions/agents.md §4.
+      # 기존 scripts/tests/*.test.sh 는 아직 수동 실행이다(자동화는 후속 과제).
+      - id: subagent-usage-test
+        name: 서브에이전트 사용량 집계 테스트
+        language: system
+        entry: bash scripts/tests/subagent-usage.test.sh
+        pass_filenames: false
+        files: '^scripts/(subagent_usage\.py|tests/subagent-usage\.test\.sh)$'
+        stages: [pre-commit]
+
       # 저장소 전역 링크·앵커 + 위키 인덱스(Home.md·_Sidebar.md) 등재 검사.
       # 🔴 판정이 파일 단위가 아니라 "A 가 B 를 가리키는가" 관계 단위라 pass_filenames
       #    가 의미가 없고, 모집단이 항상 전체여야 해 always_run 으로 둔다
