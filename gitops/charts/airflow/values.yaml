@@ -170,8 +170,17 @@ airflow:
   # ... MigrationHead(s) in DB: set()", 네임스페이스에 Job 없음) → 교착.
   # 그래서 Helm 훅을 끄고(useHelmHooks: false) migrate Job 은 ArgoCD Sync 훅으로 돌린다.
   # 트레이드오프(문서가 인정): sync 마다 마이그레이션이 다시 돈다 — 이상적이진 않지만 자동이다.
+  #
+  # 문서 값 4개: createUserJob·migrateDatabaseJob 의 useHelmHooks: false 와 applyCustomEnv: false
+  # (Job manifest 의 불변성 유지가 문서가 든 이유), 그리고 migrateDatabaseJob.jobAnnotations 의
+  # Sync 훅. 아래 createUserJob.jobAnnotations 의 PostSync 는 문서 값이 아니라 컨트롤러의 선택이다:
+  # 훅 없이 일반 리소스로 두면 ttlSecondsAfterFinished(기본 300)로 Job 이 지워져 Missing →
+  # OutOfSync → selfHeal 재생성이 5분마다 반복된다(2026-10-08 관측). 파드는 create-user 를
+  # 기다리지 않아 PostSync 여도 교착하지 않고, 훅은 추적 대상이 아니며 ArgoCD 기본
+  # BeforeHookCreation 으로 sync 때 재생성된다.
   migrateDatabaseJob:
     useHelmHooks: false
+    applyCustomEnv: false
     jobAnnotations:
       "argocd.argoproj.io/hook": Sync
     resources:
@@ -184,6 +193,9 @@ airflow:
 
   createUserJob:
     useHelmHooks: false
+    applyCustomEnv: false
+    jobAnnotations:
+      "argocd.argoproj.io/hook": PostSync
     resources:
       requests:
         cpu: "100m"

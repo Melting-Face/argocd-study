@@ -18,6 +18,11 @@
 #      PostSync 로 옮기는데, 파드가 마이그레이션을 기다려 교착한다. (Secret/airflow-broker-url
 #      의 pre-install 훅은 chart 가 끌 수 없고 PreSync 로 매핑돼 교착과 무관하므로 제외한다.)
 #   7. migrate-database Job(이름 *-run-airflow-migrations)이 일반 리소스로 렌더되고 argocd.argoproj.io/hook: Sync 를 가진다.
+#   8. create-user Job 이 argocd.argoproj.io/hook: PostSync 를 가진다(훅이라 selfHeal 이
+#      재생성 루프를 돌지 않는다 — 일반 리소스면 ttlSecondsAfterFinished 삭제 후 Missing 이 된다).
+#   9. 두 Job(create-user·migrate)의 컨테이너에 envFrom 키가 없다 — applyCustomEnv: false 이면
+#      템플릿이 custom_airflow_environment_from 을 렌더하지 않는다(true 이면 `envFrom: []` 가
+#      남는다). Job manifest 를 불변으로 유지하려는 공식 문서 권고의 렌더 증거다.
 #
 # 의존 도구: helm, ruby(YAML→JSON), jq. yq 는 쓰지 않는다(이 환경에 없다).
 set -euo pipefail
@@ -174,6 +179,31 @@ if [ "${migrate_hook}" = "Sync" ]; then
     pass "[7 migrate Job] argocd.argoproj.io/hook: Sync"
 else
     fail "[7 migrate Job] 기대 'Sync', 실제 '${migrate_hook:-(Job 없음)}'"
+fi
+
+# --- 단언 8: create-user Job 은 ArgoCD PostSync 훅 ---
+create_hook="$(yaml_to_json_lines <"${WORKDIR}/render1.yaml" |
+    jq -r 'select(.kind == "Job" and (.metadata.name | test("create-user")))
+           | .metadata.annotations["argocd.argoproj.io/hook"] // "(없음)"')"
+if [ "${create_hook}" = "PostSync" ]; then
+    pass "[8 create-user Job] argocd.argoproj.io/hook: PostSync"
+else
+    fail "[8 create-user Job] 기대 'PostSync', 실제 '${create_hook:-(Job 없음)}'"
+fi
+
+# --- 단언 9: 두 Job 컨테이너에 envFrom 없음(applyCustomEnv: false) ---
+env_from_jobs="$(yaml_to_json_lines <"${WORKDIR}/render1.yaml" |
+    jq -r 'select(.kind == "Job" and (.metadata.name | test("create-user|run-airflow-migrations")))
+           | select([.spec.template.spec.containers[] | has("envFrom")] | any)
+           | .metadata.name')"
+job_count="$(yaml_to_json_lines <"${WORKDIR}/render1.yaml" |
+    jq -r 'select(.kind == "Job" and (.metadata.name | test("create-user|run-airflow-migrations")))
+           | .metadata.name' | wc -l | tr -d ' ')"
+if [ "${job_count}" = "2" ] && [ -z "${env_from_jobs}" ]; then
+    pass "[9 applyCustomEnv false] 두 Job 컨테이너에 envFrom 없음"
+else
+    fail "[9 applyCustomEnv false] Job ${job_count}개, envFrom 이 있는 Job:"
+    indent <<<"${env_from_jobs}"
 fi
 
 exit "${overall_rc}"
