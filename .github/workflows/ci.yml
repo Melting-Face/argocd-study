@@ -131,34 +131,6 @@ jobs:
           done
           echo "검증한 스택: ${found}개"
 
-      # D4(설계 스펙) — repoURL은 ArgoCD에 전역 변수가 없어 gitops/**에 평문으로
-      # 중복된다. 이 스텝이 그 불일치를 잡는 유일한 자동 게이트다. 원칙 1: 파일만
-      # 읽는다 — kubectl·helm·terraform·argocd 같은 인프라 명령을 쓰지 않는다.
-      #
-      # 🔴 이 검사가 보지 않는 것(빠뜨린 게 아니라 범위 밖임을 명시한다):
-      #   ① 정규식이 `^[[:space:]]*repoURL:`로 **줄 시작에 고정**돼 있다 —
-      #      block-style YAML(`repoURL:\n  값` 또는 같은 줄 값)만 잡는다.
-      #      flow-style(`source: { repoURL: ..., targetRevision: ... }`)로
-      #      한 줄에 욱여넣으면 이 정규식이 조용히 못 잡는다. 지금
-      #      `gitops/**`는 전부 block-style이라 당장은 문제가 없지만, 다음
-      #      Application을 flow-style로 추가하면 재현 가능한 맹점이다.
-      #   ② 검사 범위가 `gitops/`뿐이다 — root Application의 repoURL은
-      #      `terraform/platform/charts/root-app`의 Helm 템플릿 값
-      #      (`{{ .Values.repoUrl }}`)이라 평문이 아니고, Terraform이
-      #      `var.repo_url` 하나로 주입한다(D4가 말하는 "평문 중복" 대상이
-      #      애초에 아니다) — 의도된 범위 밖이다.
-      - name: repoURL 일관성 검사 (gitops/**)
-        run: |
-          set -euo pipefail
-          urls=$(grep -rhoE '^[[:space:]]*repoURL:[[:space:]]*\S+' gitops \
-            --include='*.yaml' --include='*.yml' | awk '{print $NF}' | sort -u)
-          count=$(printf '%s\n' "${urls}" | grep -c . || true)
-          if [ "${count}" -eq 0 ]; then
-            echo "::warning::gitops/** 에서 repoURL 을 찾지 못했다"
-          elif [ "${count}" -gt 1 ]; then
-            echo "::error::gitops/** 의 repoURL 이 서로 다르다"
-            printf '%s\n' "${urls}"
-            exit 1
-          else
-            echo "repoURL 일치 확인: ${urls}"
-          fi
+      # (Phase 3, 2026-10-08) D4 repoURL 일관성 검사 스텝을 지웠다 — gitops/apps/ 가 사라져
+      # gitops/** 에 repoURL 이 0개가 되고, repoURL 은 Terraform var.repo_url 한 곳에만
+      # 남아 "평문 중복" 자체가 구조적으로 소멸했다(Phase 3 spec §7).
