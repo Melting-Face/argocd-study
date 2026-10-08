@@ -73,7 +73,24 @@ Connection·Variable을 다시 입력해야 한다는 점을 감수한다.
 ```bash
 kubectl --context kind-argocd-study -n airflow get secret airflow-fernet-key airflow-jwt-secret airflow-webserver-secret \
   -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.data}{"\n"}{end}' | sed -E 's/:"[^"]+"/:<redacted>/g'
-# 관측 결과:
+```
+
+관측 결과(2026-10-08 UTC, `kind-argocd-study`). 값은 명령의 `sed`가 `<redacted>`로 가린 것이다.
+2절 블록 실행은 아래 3개 Secret과 네임스페이스를 새로 만들었다(종료 코드 0).
+
+```text
+namespace/airflow created
+secret/airflow-fernet-key created
+secret/airflow-jwt-secret created
+secret/airflow-webserver-secret created
+```
+
+3절 확인 명령의 출력은 다음과 같다.
+
+```text
+airflow-fernet-key {"fernet-key":<redacted>}
+airflow-jwt-secret {"jwt-secret":<redacted>}
+airflow-webserver-secret {"api-secret-key":<redacted>}
 ```
 
 판정: 세 Secret이 각각 위 표의 데이터 키 **하나씩만** 갖는다.
