@@ -105,3 +105,40 @@ variable "http_host_port" {
   type        = number
   default     = 8081
 }
+
+# Task 6 의 helm_release.appset 이 이 변수를 소비한다. 그때까지는 참조가 없어 tflint 가
+# 미사용 선언으로 잡으므로 ignore 를 둔다 - Task 6 이 참조를 추가하면 이 ignore 를 지운다.
+# tflint-ignore: terraform_unused_declarations
+variable "apps" {
+  description = <<-EOT
+    ApplicationSet 이 Application 으로 펼칠 앱 목록. 원소는 name·path·namespace 셋뿐이며
+    이미지 태그는 넣지 않는다(태그는 main 의 values 한 줄이 소유한다). airflow 는 이미지가
+    GHCR 에 생긴 뒤 추가한다. 검증: name 은 중복 불가이자 DNS-1123 label(63자 이하),
+    path 는 gitops/charts/ 로 시작해야 한다.
+  EOT
+  type = list(object({
+    name      = string
+    path      = string
+    namespace = string
+  }))
+  default = [
+    { name = "podinfo", path = "gitops/charts/podinfo", namespace = "podinfo" },
+  ]
+
+  validation {
+    condition     = length(distinct([for a in var.apps : a.name])) == length(var.apps)
+    error_message = "apps 의 name 은 중복될 수 없다 - name 이 Application 이름이라 중복되면 하나가 다른 하나를 덮어쓴다."
+  }
+
+  validation {
+    condition     = alltrue([for a in var.apps : startswith(a.path, "gitops/charts/")])
+    error_message = "apps 의 path 는 gitops/charts/ 로 시작해야 한다 - plain manifest 등 다른 소스 타입은 이 ApplicationSet 의 범위 밖이다."
+  }
+
+  validation {
+    condition = alltrue([
+      for a in var.apps : can(regex("^[a-z0-9]$|^[a-z0-9][-a-z0-9]*[a-z0-9]$", a.name)) && length(a.name) <= 63
+    ])
+    error_message = "apps 의 name 은 DNS-1123 label(소문자·숫자·하이픈, 양 끝은 영숫자, 63자 이하)이어야 한다 - Application 이름과 리소스 이름이 된다."
+  }
+}
