@@ -52,16 +52,33 @@ plan의 각 태스크에 `실행: main | sdd`를 표기한다.
 
 ## 4. 효과 측정
 
-plan 실행 뒤 서브에이전트 비용을 다음 방법으로 재집계해 **관측값만** 기록한다(기준선은 설계 §2-1).
+**계획을 실행하면 완료 보고 직전에 1회 측정해** 설계 문서 §5-2 기록표에 1행을 추가한다(필수).
+**관측값만** 적고, 기록이 3건 쌓이면 이 규칙과 설계 S4 판정을 다시 본다.
 
-- 대상: `~/.claude/projects/<프로젝트 경로를 -로 바꾼 이름>/*/subagents/*.jsonl`과 짝인
-  `*.meta.json`(`description`·`agentType`·`model`).
-- 집계: assistant 메시지를 `message.id`로 중복 제거한 뒤 `input + cache_read + cache_creation`
-  토큰과 메시지 수(턴)를 합산한다. 캐시 읽기를 포함한 입력량이라 **청구액 비율과는 다르다.**
-- 비교는 태스크 성격(`main`/`sdd`, 탐색형/폴링형)을 함께 적는다 — 성격이 다른 태스크끼리의
-  수치 비교는 왜곡된다.
+```bash
+# 시각은 UTC. 시작 = 계획 실행 시작, 끝 = 완료 보고 직전
+python3 scripts/subagent_usage.py --session <세션 ID> \
+  --since 2026-10-08T12:04:00Z --until 2026-10-08T12:15:00Z
+# 원인 분석이 필요하면 --tools(도구·Bash 첫 단어·대기 횟수), 기계 처리는 --json
+```
+
+- **판정은 메인 세션 + 서브에이전트 총량(`합계 all`)으로 한다.** `main` 태스크를 메인 세션으로
+  옮기면 서브에이전트만 줄어 보이는 착시가 생긴다.
+- 메인 세션 기록에는 브레인스토밍 등 계획 밖 대화가 섞이므로 **메시지 시각(`--since`/`--until`)으로
+  실행 구간만 자른다.** 세션 ID는 `~/.claude/projects/<저장소 경로를 -로 바꾼 이름>/`의
+  `*.jsonl` 파일명이다.
+- 토큰은 `input`·`cache_read`·`cache_creation`·`output`으로 나눠 본다. `ctx`(앞의 셋 합계)는 캐시
+  읽기를 포함해 **청구액 비율과 다르다** — 달러 환산은 하지 않는다.
+- 비교는 태스크 성격(`main`/`sdd`, 탐색형/폴링형)을 함께 적는다 — 성격이 다른 계획끼리의 수치
+  비교는 왜곡된다.
+- 공개 저장소이므로 서브에이전트 `description` 원문·명령 인자는 옮기지 않는다(스크립트도 Bash
+  명령은 첫 단어만 출력한다).
+- 🔴 스크립트가 **exit 2**(파일은 있는데 집계 0건)로 끝나거나 건너뛴 행이 늘면 Claude Code 기록
+  형식 변화를 먼저 의심한다 — 출력 끝줄의 `version`과 함께 확인한다. 입력 형식은 Claude Code
+  내부 형식이라 보장되지 않는다.
 
 ## 참고
 
 - [서브에이전트 효율화·축소 설계](../superpowers/specs/2026-10-08-subagent-slimming-design.md) — 실측·결정 근거
 - `.agents/skills/subagent-driven-development/SKILL.md` — 덧씌우는 대상(Model Selection·Task Loop·breaker)
+- [`scripts/subagent_usage.py`](../../scripts/subagent_usage.py) — §4 집계 스크립트(테스트: `scripts/tests/subagent-usage.test.sh`)
