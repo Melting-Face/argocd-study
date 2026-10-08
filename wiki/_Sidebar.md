@@ -9,6 +9,7 @@
 - [drift-and-selfheal](drift-and-selfheal.md)
 - [argocd-source-types](argocd-source-types.md)
 - [applicationset-list-generator](applicationset-list-generator.md)
+- [airflow-on-argocd](airflow-on-argocd.md)
 
 **Terraform · Helm · Helmfile 축**
 
