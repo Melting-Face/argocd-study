@@ -30,3 +30,28 @@ resource "helm_release" "argo_cd" {
 
   values = [templatefile("${path.module}/values/argocd.yaml.tftpl", {})]
 }
+
+# ApplicationSet 전용 두 번째 릴리스 — charts/appset/ (로컬 chart, 이 저장소 소유). Phase 3
+# Task 6 에서 root Application(charts/root-app) 을 대체했다(Phase 3 spec §4-1·§5-5).
+#
+# 🔴 왜 별도 릴리스인가(root-app 때 실측한 이유가 그대로 적용된다, spec D5 정정): argo-cd 차트는
+# ApplicationSet CRD 를 평범한 템플릿으로 담고 있어, 같은 helm install 안에서 CRD 와 그 CR 을 함께
+# 만들면 Helm 이 매니페스트를 빌드하는 단계에서 `no matches for kind ... ensure CRDs are installed
+# first` 로 막힌다(2026-10-04 실측, git 이력의 root_app 주석과 wiki/argocd-bootstrap.md).
+# ⇒ depends_on + wait = true 로 "argo_cd 릴리스가 완전히 끝난 뒤"에만 적용한다 — 사용자 흐름
+# ②("ArgoCD 가 준비되면 앱 목록을 배포")의 구현이 이것이다. kubernetes_manifest 는 여전히 쓰지
+# 않는다(plan 시점 CRD 스키마 조회 문제, D5).
+#
+# 값은 repoUrl·apps 두 개뿐이다 — 이미지 태그는 절대 여기 넣지 않는다(spec §3-2 규칙 1).
+resource "helm_release" "appset" {
+  name       = "appset"
+  chart      = "${path.module}/charts/appset"
+  namespace  = "argocd"
+  depends_on = [helm_release.argo_cd]
+  wait       = true
+
+  values = [yamlencode({
+    repoUrl = var.repo_url
+    apps    = var.apps
+  })]
+}
