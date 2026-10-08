@@ -1,6 +1,0 @@
-# argocd.tf 의 helm_release.root_app 이 set 블록으로 repoUrl 을 덮어쓴다. 나머지는
-# 이 프로젝트 레이아웃이 고정값이라 기본값 그대로 쓴다(spec §4 디렉터리 레이아웃).
-namespace: argocd
-repoUrl: ""
-targetRevision: main
-path: gitops/apps

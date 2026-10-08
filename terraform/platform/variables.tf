@@ -66,6 +66,9 @@ variable "storage_class" {
 
 # Task 5 가 "선언이 사용보다 앞선다" 원칙에 따라 먼저 선언했고, 이제 Task 6(argocd.tf 의
 # templatefile)이 실제로 참조한다 — tflint-ignore 는 더 이상 필요 없어 지웠다.
+# 🔴 Phase 3 Task 6 — root_app 제거(apply #1)와 appset 추가(apply #2) 사이에는 소비자가 없다.
+# helm_release.appset 이 다시 소비하면 아래 ignore 를 지운다(var.apps 와 같은 처리, PF-R2).
+# tflint-ignore: terraform_unused_declarations
 variable "repo_url" {
   description = <<-EOT
     ArgoCD root Application 이 추적할 Git 저장소 URL. argocd.tf 의 templatefile() 이
