@@ -111,9 +111,9 @@ variable "http_host_port" {
 variable "apps" {
   description = <<-EOT
     ApplicationSet 이 Application 으로 펼칠 앱 목록. 원소는 name·path·namespace 셋뿐이며
-    이미지 태그는 넣지 않는다(태그는 main 의 values 한 줄이 소유한다). airflow 는 이미지가
-    GHCR 에 생긴 뒤 추가한다. 검증: name 은 중복 불가이자 DNS-1123 label(63자 이하),
-    path 는 gitops/charts/ 로 시작해야 한다.
+    이미지 태그는 넣지 않는다(태그는 main 의 values 한 줄이 소유한다). airflow 는 Phase 3
+    Task 8 에 GHCR 이미지 v0.1.0 생성 후 추가됐다. 검증: name 은 중복 불가이자 DNS-1123
+    label(63자 이하), path 는 gitops/charts/ 로 시작해야 한다.
   EOT
   type = list(object({
     name      = string
@@ -122,6 +122,7 @@ variable "apps" {
   }))
   default = [
     { name = "podinfo", path = "gitops/charts/podinfo", namespace = "podinfo" },
+    { name = "airflow", path = "gitops/charts/airflow", namespace = "airflow" },
   ]
 
   validation {
