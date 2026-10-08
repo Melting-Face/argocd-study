@@ -83,8 +83,11 @@ ApplicationSet을 배포할 때 권하는 이스케이프다. 나머지 세부�
   큰따옴표를 쓰기 때문이다.
 - `repoUrl` 은 `required` 로 막는다. 기본값이 빈 문자열이면 `helm lint` 는 WARN만 내고
   통과하지만 `helm template` 은 실패한다.
-- `syncPolicy` 는 block-style로 쓴다 — 빈 맵·flow-style 맵은 ArgoCD가 정규화해 영구
-  드리프트를 만든다([소스 타입 전환](argocd-source-types.md)).
+- `syncPolicy` 에는 빈 맵을 두지 않는다 — 빈 맵(`helm: {}`)은 Kubernetes API 서버가
+  저장하지 않아 영구 `OutOfSync` 가 됨을 관측했다([소스 타입 전환](argocd-source-types.md)).
+  이 템플릿은 값이 있는 맵(`automated` 아래 `selfHeal`·`prune`)만 쓴다. 표기는 block-style로
+  통일했는데, 이는 저장소 전반의 일관성 때문이며 flow-style이 드리프트를 만든다고 관측한
+  것은 아니다.
 - `automated`·`selfHeal`·`prune` 세 스위치를 모두 켠다. 독립된 스위치이므로 하나로 뭉뚱그려
   설명하지 않는다([드리프트와 self-heal](drift-and-selfheal.md)).
 
@@ -133,8 +136,14 @@ values = [
 ## 관측 기록
 
 모든 시각은 UTC다. 아래 값은 `task-6-preflight.md` 에 적힌 그대로이며, **기록에 없는 출력은
-적지 않는다.** 사전 기록 외 단계에서 정확히 어떤 명령으로 뽑았는지는 기록에 남아 있지 않다 —
-판정 명령은 설계 §7의 G1·G2 표와 Task 6 계획의 것이다.
+적지 않는다.** 명령은 컨트롤러 셸 이력에서 보강한 기록(`task-6-preflight.md` "기록 보강")
+이다. 모두 `--context kind-argocd-study` 로 붙었다.
+
+- Deployment UID: `kubectl -n podinfo get deploy podinfo -o jsonpath='{.metadata.uid}'`
+- Application 필드: `kubectl -n argocd get application <app> -o jsonpath='{.metadata.finalizers}'`
+  및 `'{.metadata.ownerReferences}'`
+- 목록: `kubectl -n argocd get applications`, `kubectl -n argocd get applicationset`
+- 조건: `kubectl -n argocd get applicationset apps -o jsonpath='{range .status.conditions[*]}{.type}={.status}({.reason}) {end}'`
 
 ### 사전 기록 (2026-10-08T10:38:40Z)
 
@@ -172,7 +181,16 @@ appset conditions: ErrorOccurred=False(ApplicationSetUpToDate) ParametersGenerat
 
 ### apply #2 이후 `terraform plan`
 
-`terraform plan -detailed-exitcode` 의 종료 코드는 **0**(변경 없음)이었다.
+2026-10-08T11:31:40Z 관측 직후 같은 명령으로 확인했고 종료 코드는 0이었다. 이후
+2026-10-08T11:54:45Z 에 재관측한 기록이다(스택 `terraform/platform`).
+
+```text
+$ terraform -chdir=terraform/platform plan -no-color -detailed-exitcode
+No changes. Your infrastructure matches the configuration.
+```
+
+종료 코드는 **0**이다. 첫 기록에서 셸 `PIPESTATUS` 를 빠뜨려, 같은 명령을 즉시 재실행한
+결과가 0이었다.
 
 ### 전후 비교
 
