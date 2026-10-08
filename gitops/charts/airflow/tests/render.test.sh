@@ -14,6 +14,10 @@
 #   4. airflow 컨테이너 이미지가 모두 ghcr.io/melting-face/airflow-dags:v0.1.0 이다.
 #   5. scripts/bump-image-tag.sh 의 마커 줄이 airflow.images.airflow.tag 와 이어져 있다
 #      (진짜 values 의 복사본에만 쓴다 — 실제 파일은 건드리지 않는다).
+#   6. helm.sh/hook 어노테이션이 붙은 Job 이 없다 — ArgoCD 는 post-install,post-upgrade 훅을
+#      PostSync 로 옮기는데, 파드가 마이그레이션을 기다려 교착한다. (Secret/airflow-broker-url
+#      의 pre-install 훅은 chart 가 끌 수 없고 PreSync 로 매핑돼 교착과 무관하므로 제외한다.)
+#   7. migrate-database Job(이름 *-run-airflow-migrations)이 일반 리소스로 렌더되고 argocd.argoproj.io/hook: Sync 를 가진다.
 #
 # 의존 도구: helm, ruby(YAML→JSON), jq. yq 는 쓰지 않는다(이 환경에 없다).
 set -euo pipefail
@@ -149,6 +153,27 @@ if render "${WORKDIR}/render-bumped.yaml" -f "${copy}"; then
     check_images "5c bump 렌더" "${WORKDIR}/render-bumped.yaml" v0.1.1
 else
     fail "[5c bump 렌더] 복사본으로 helm template 실패"
+fi
+
+# --- 단언 6: Job 에 helm.sh/hook 어노테이션 없음 ---
+hooked="$(yaml_to_json_lines <"${WORKDIR}/render1.yaml" |
+    jq -r 'select(.kind == "Job" and ((.metadata.annotations // {}) | has("helm.sh/hook")))
+           | "\(.kind)/\(.metadata.name)"')"
+if [ -z "${hooked}" ]; then
+    pass "[6 helm hook 없음] helm.sh/hook 어노테이션을 가진 Job 0개"
+else
+    fail "[6 helm hook 없음] helm.sh/hook 어노테이션이 붙은 Job 이 있다:"
+    indent <<<"${hooked}"
+fi
+
+# --- 단언 7: migrate-database Job 은 ArgoCD Sync 훅 ---
+migrate_hook="$(yaml_to_json_lines <"${WORKDIR}/render1.yaml" |
+    jq -r 'select(.kind == "Job" and (.metadata.name | test("run-airflow-migrations")))
+           | .metadata.annotations["argocd.argoproj.io/hook"] // "(없음)"')"
+if [ "${migrate_hook}" = "Sync" ]; then
+    pass "[7 migrate Job] argocd.argoproj.io/hook: Sync"
+else
+    fail "[7 migrate Job] 기대 'Sync', 실제 '${migrate_hook:-(Job 없음)}'"
 fi
 
 exit "${overall_rc}"

@@ -161,7 +161,19 @@ airflow:
           memory: "128Mi"
 
   # --- 8. 일회성 Job (DB 마이그레이션 / 초기 admin 계정) ---
+  # 🔴 ArgoCD 교착 회피 — 근거: Airflow Helm chart 1.22.0 문서 "Installing the Helm Chart
+  # with Argo CD, Flux, Rancher or Terraform", Argo CD 문서 "Helm Hooks".
+  # chart 의 두 Job 은 기본으로 helm.sh/hook: post-install,post-upgrade 를 달고, ArgoCD 는
+  # 이를 PostSync 로 옮긴다. PostSync 는 리소스가 Healthy 가 된 뒤에야 도는데 파드(api-server·
+  # dag-processor·scheduler·triggerer)는 마이그레이션을 기다려 Init:Error 로 반복한다(2026-10-08
+  # 관측: wait-for-airflow-migrations 의 "TimeoutError: There are still unapplied migrations
+  # ... MigrationHead(s) in DB: set()", 네임스페이스에 Job 없음) → 교착.
+  # 그래서 Helm 훅을 끄고(useHelmHooks: false) migrate Job 은 ArgoCD Sync 훅으로 돌린다.
+  # 트레이드오프(문서가 인정): sync 마다 마이그레이션이 다시 돈다 — 이상적이진 않지만 자동이다.
   migrateDatabaseJob:
+    useHelmHooks: false
+    jobAnnotations:
+      "argocd.argoproj.io/hook": Sync
     resources:
       requests:
         cpu: "100m"
@@ -171,6 +183,7 @@ airflow:
         memory: "512Mi"
 
   createUserJob:
+    useHelmHooks: false
     resources:
       requests:
         cpu: "100m"
