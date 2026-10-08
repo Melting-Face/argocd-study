@@ -95,6 +95,30 @@ check "마커 2개: exit" "3" "$rc"
 cmp -s "$work/case5.orig" "$f" && same=same || same=differ
 check "마커 2개: 파일 불변" "same" "$same"
 
+# 케이스 6: 마커 줄 모양 위반 -> exit 3, 파일 불변
+n=0
+while IFS= read -r bad_line; do
+    n=$((n + 1))
+    f="$work/case6.yaml"
+    printf 'airflow:\n  images:\n    airflow:\n%s\n' "$bad_line" >"$f"
+    cp "$f" "$work/case6.orig"
+    run v0.2.0 "$f"
+    check "모양 위반 #$n: exit" "3" "$rc"
+    cmp -s "$work/case6.orig" "$f" && same=same || same=differ
+    check "모양 위반 #$n: 파일 불변" "same" "$same"
+done <<'LINES'
+      tag: 'v0.1.0'  # bump-image-tag
+      image: ghcr.io/x:v0.1.0  # bump-image-tag
+      tag: "v0.1.0-rc1"  # bump-image-tag
+LINES
+
+# 케이스 7: 따옴표 없는 값도 지원한다
+f="$work/case7.yaml"
+printf '      tag: v0.1.0  # bump-image-tag\n' >"$f"
+run v0.2.0 "$f"
+check "따옴표 없음: stdout" "changed" "$out"
+check "따옴표 없음: 결과" '      tag: v0.2.0  # bump-image-tag' "$(cat "$f")"
+
 echo "---"
 echo "통과 $pass / 실패 $fail"
 [ "$fail" -eq 0 ]

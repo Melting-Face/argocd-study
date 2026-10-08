@@ -16,7 +16,7 @@
 #   0  성공 — stdout 에 `changed` 또는 `unchanged`
 #   1  사용법 오류·파일 없음
 #   2  태그 형식 위반 (^v[0-9]+\.[0-9]+\.[0-9]+$) — 파일을 열기 전에 검사한다
-#   3  마커 줄이 정확히 1개가 아님 (0개 또는 2개 이상)
+#   3  마커 줄이 정확히 1개가 아니거나(0개·2개 이상) 모양이 `tag: "vX.Y.Z"` 가 아님
 set -u
 
 marker='# bump-image-tag'
@@ -47,16 +47,42 @@ if [ "$count" -ne 1 ]; then
     exit 3
 fi
 
-# 임시 파일에 치환해 쓴 뒤 비교·교체한다 (BSD/GNU sed 의 `-i` 차이를 피한다)
+# 마커 줄의 모양 검사 — `tag:` 키 + 정확히 vX.Y.Z 인 값(큰따옴표는 선택)만 허용한다.
+# 모양이 다르면 sed 가 조용히 아무것도 안 바꾸고 `unchanged` 로 오인되므로 exit 3 으로 막는다.
+line="$(grep -- "${marker}[[:space:]]*\$" "$file")"
+re_quoted='^[[:space:]]*tag:[[:space:]]*"(v[0-9]+\.[0-9]+\.[0-9]+)"[[:space:]]*# bump-image-tag[[:space:]]*$'
+re_plain='^[[:space:]]*tag:[[:space:]]*(v[0-9]+\.[0-9]+\.[0-9]+)[[:space:]]*# bump-image-tag[[:space:]]*$'
+if [[ "$line" =~ $re_quoted ]] || [[ "$line" =~ $re_plain ]]; then
+    current="${BASH_REMATCH[1]}"
+else
+    echo "마커 줄 모양 위반(기대: tag: \"vX.Y.Z\"  $marker): $line" >&2
+    exit 3
+fi
+
+# `unchanged` 는 마커 줄의 값이 이미 <tag> 와 같을 때만 의미한다
+if [ "$current" = "$tag" ]; then
+    echo "unchanged"
+    exit 0
+fi
+
+# 임시 파일에 치환해 쓴 뒤 교체한다 (BSD/GNU sed 의 `-i` 차이를 피한다)
 tmp="$(mktemp)"
 trap 'rm -f "$tmp"' EXIT
 sed "/${marker}[[:space:]]*\$/s/\\(tag:[[:space:]]*\"\\{0,1\\}\\)v[0-9][0-9]*\\.[0-9][0-9]*\\.[0-9][0-9]*/\\1${tag}/" \
     "$file" >"$tmp"
 
-if cmp -s "$file" "$tmp"; then
-    echo "unchanged"
+# 치환 결과 검증 — 마커 줄의 값이 정확히 <tag> 가 아니면 파일을 건드리지 않고 실패한다
+newline="$(grep -- "${marker}[[:space:]]*\$" "$tmp")"
+if [[ "$newline" =~ $re_quoted ]] || [[ "$newline" =~ $re_plain ]]; then
+    if [ "${BASH_REMATCH[1]}" != "$tag" ]; then
+        echo "치환 검증 실패: $newline" >&2
+        exit 3
+    fi
 else
-    # cat 으로 덮어써 원본 파일의 권한·inode 를 유지한다
-    cat "$tmp" >"$file"
-    echo "changed"
+    echo "치환 검증 실패: $newline" >&2
+    exit 3
 fi
+
+# cat 으로 덮어써 원본 파일의 권한·inode 를 유지한다
+cat "$tmp" >"$file"
+echo "changed"

@@ -32,6 +32,16 @@ jobs:
       contents: read
       packages: write
     steps:
+      # 트리거 글롭 v*.*.* 는 v1.2.3-rc1 같은 비형식 태그도 통과시킨다 — 빌드·push 전에 막는다.
+      - name: 태그 형식 검사
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "::error::태그 '$TAG' 가 vX.Y.Z 형식이 아니다"
+              exit 1
+          fi
+
       - name: 태그 ref 체크아웃
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
