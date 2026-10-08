@@ -3,7 +3,7 @@
 #
 # Airflow umbrella chart(공식 chart 를 dependency 로 감싼 chart)를 `helm template` 으로
 # 렌더해 정적 계약을 검증한다. 클러스터를 건드리지 않는다(렌더링만 한다). 의존 chart 는
-# `helm dependency build` 로 받는다 — 네트워크(https://airflow.apache.org)가 필요하다.
+# `scripts/helm-dep-build.sh`(빈 helm 환경에서도 repo 를 등록한다)로 받는다 — 네트워크(https://airflow.apache.org)가 필요하다.
 #
 # 단언:
 #   1. 렌더 결정성 — 같은 입력으로 두 번 렌더한 결과가 바이트 동일하다.
@@ -64,7 +64,7 @@ list_airflow_images() {
 }
 
 # --- 준비: dependency 받기 ---
-if ! helm dependency build "${CHART_DIR}" >"${WORKDIR}/dep.log" 2>&1; then
+if ! "${REPO_ROOT}/scripts/helm-dep-build.sh" "${CHART_DIR}" >"${WORKDIR}/dep.log" 2>&1; then
     echo "FAIL [준비] helm dependency build 실패 — chart 가 없거나 깨졌다:"
     sed 's/^/    /' "${WORKDIR}/dep.log"
     exit 1

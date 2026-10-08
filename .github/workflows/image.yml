@@ -113,7 +113,7 @@ jobs:
       - name: 렌더 확인
         if: steps.bump.outputs.result == 'changed'
         run: |
-          helm dependency build gitops/charts/airflow
+          scripts/helm-dep-build.sh gitops/charts/airflow
           helm template airflow gitops/charts/airflow -n airflow >/dev/null
 
       - name: 커밋·push

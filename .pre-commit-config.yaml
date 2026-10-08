@@ -157,8 +157,7 @@ repos:
         entry: >-
           bash -c 'set -e;
           for d in terraform/platform/charts/appset gitops/charts/podinfo gitops/charts/airflow; do
-          if grep -q "^dependencies:" "$d/Chart.yaml"; then
-          echo "--- helm dependency build $d ---"; helm dependency build "$d"; fi;
+          scripts/helm-dep-build.sh "$d";
           echo "--- helm lint --strict $d ---"; helm lint --strict "$d"; done'
         pass_filenames: false
         files: '^(terraform/platform/charts/appset|gitops/charts/podinfo|gitops/charts/airflow)/'
